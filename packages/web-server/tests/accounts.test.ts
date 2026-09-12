@@ -49,6 +49,13 @@ test('account passwords, case-insensitive names, forced rotation and last admin'
     assert.equal(accounts.session(token), null)
     await assert.rejects(accounts.password(admin.id, password, false, admin.id, admin.passwordHash), /Account changed/)
     const user = await accounts.create('alice', password, 'user', admin.id)
+    const revoked = () => {
+      throw new Error('Session expired')
+    }
+    await assert.rejects(accounts.create('revoked', password, 'user', admin.id, revoked), /Session expired/)
+    assert.equal(accounts.find('revoked'), undefined)
+    await assert.rejects(accounts.password(user.id, password + 'reset', true, admin.id, undefined, revoked), /Session expired/)
+    assert.equal(accounts.get(user.id)!.passwordHash, user.passwordHash)
     const session = await accounts.login('alice', password, 'ip', 'browser')
     accounts.disable(user.id, true, admin.id)
     assert.equal(accounts.session(session.token), null)
@@ -83,6 +90,46 @@ test('concurrent startup shares a process, idle reap and maintenance gate', asyn
     runtimes.resumeStarts()
     await runtimes.close()
     accounts.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('revoking a session blocks an administrator request still uploading its body', async () => {
+  const dir = await workspace(),
+    accounts = new Accounts(dir)
+  const runtimes = new Runtimes(dir, path.join(root, 'packages/web-server/tests/fixture.cjs'))
+  const gateway = createGateway(accounts, runtimes, dir)
+  try {
+    const admin = await accounts.create('admin', password, 'admin', null)
+    await accounts.password(admin.id, password, false, admin.id)
+    const login = await accounts.login('admin', password, 'ip', 'browser')
+    gateway.server.listen(0, '127.0.0.1')
+    await once(gateway.server, 'listening')
+    const origin = `http://127.0.0.1:${(gateway.server.address() as { port: number }).port}`
+    let received!: () => void
+    const bodyPending = new Promise<void>((resolve) => {
+      received = resolve
+    })
+    gateway.server.once('request', received)
+    const request = http.request(origin + '/account-api/users', {
+      method: 'POST',
+      headers: {
+        Origin: origin,
+        Cookie: `anylisten_session=${login.token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    const response = once(request, 'response')
+    request.write('{"username":"blocked",')
+    await bodyPending
+    accounts.revoke(login.session.id, admin.id)
+    request.end(`"password":"${password}","role":"user"}`)
+    const [result] = await response
+    result.resume()
+    assert.equal(result.statusCode, 401)
+    assert.equal(accounts.find('blocked'), undefined)
+  } finally {
+    await gateway.close()
     await rm(dir, { recursive: true, force: true })
   }
 })

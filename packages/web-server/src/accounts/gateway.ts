@@ -180,6 +180,10 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         return
       }
       const auth = authFor(req)
+      const authorize = () => {
+        const current = authFor(req)
+        if (current.session.id !== auth.session.id || current.user.role !== auth.user.role) fail(401, 'Session expired')
+      }
       if (url.pathname === '/account-api/me' && req.method === 'GET') {
         json(res, 200, { user: publicUser(auth.user), sessionId: auth.session.id })
         return
@@ -193,8 +197,10 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
       }
       if (url.pathname === '/account-api/password' && req.method === 'POST') {
         const body = await readJson(req)
+        authorize()
         if (!(await verifyPassword(body.currentPassword, auth.user.passwordHash))) fail(400, 'Current password is incorrect')
-        await accounts.password(auth.user.id, body.password as string, false, auth.user.id, auth.user.passwordHash)
+        authorize()
+        await accounts.password(auth.user.id, body.password as string, false, auth.user.id, auth.user.passwordHash, authorize)
         revoke(auth.user.id)
         setCookie(res, '', req)
         json(res, 200, { ok: true })
@@ -219,12 +225,14 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
       }
       if (url.pathname === '/account-api/users' && req.method === 'POST') {
         const body = await readJson(req)
+        authorize()
         if (body.role !== 'admin' && body.role !== 'user') fail(400, 'Invalid role')
         const user = await accounts.create(
           body.username as string,
           body.password as string,
           body.role === 'admin' ? 'admin' : 'user',
-          auth.user.id
+          auth.user.id,
+          authorize
         )
         json(res, 201, { user: publicUser(user) })
         return
@@ -233,10 +241,11 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
       if (userMatch && req.method === 'POST') {
         const body = await readJson(req),
           id = userMatch[1]
+        authorize()
         if (userMatch[2] === 'disabled') {
           if (typeof body.disabled !== 'boolean') fail(400, 'disabled must be boolean')
           accounts.disable(id, body.disabled as boolean, auth.user.id)
-        } else await accounts.password(id, body.password as string, true, auth.user.id)
+        } else await accounts.password(id, body.password as string, true, auth.user.id, undefined, authorize)
         revoke(id)
         if (accounts.get(id)?.disabled) await runtimes.stop(id)
         json(res, 200, { ok: true })

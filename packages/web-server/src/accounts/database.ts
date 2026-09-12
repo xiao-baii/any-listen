@@ -51,11 +51,12 @@ export class Accounts {
   audit(actor: string | null, action: string, target?: string) {
     this.db.prepare('INSERT INTO audit(actor,action,target,time) VALUES(?,?,?,?)').run(actor, action, target ?? null, Date.now())
   }
-  async create(username: string, password: string, role: 'admin' | 'user', actor: string | null) {
+  async create(username: string, password: string, role: 'admin' | 'user', actor: string | null, authorize?: () => void) {
     if (typeof username !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$/.test(username))
       fail(400, 'Username must contain 3 to 32 letters, digits, dots, underscores or hyphens')
     if (role !== 'admin' && role !== 'user') fail(400, 'Invalid role')
     const hash = await hashPassword(password)
+    authorize?.()
     if (this.find(username)) fail(409, 'Username already exists')
     const id = randomUUID()
     this.db.transaction(() => {
@@ -99,8 +100,9 @@ export class Accounts {
   revoke(id: string, userId: string) {
     this.db.prepare('DELETE FROM sessions WHERE id = ? AND userId = ?').run(id, userId)
   }
-  async password(id: string, password: string, force: boolean, actor: string, expectedHash?: string) {
+  async password(id: string, password: string, force: boolean, actor: string, expectedHash?: string, authorize?: () => void) {
     const hash = await hashPassword(password)
+    authorize?.()
     if (!this.get(id)) fail(404, 'Account not found')
     this.db.transaction(() => {
       const current = this.get(id)!
