@@ -12,7 +12,7 @@ env:
 jobs:
   sync-desktop-app:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref_name, 'desktop-')
+    if: github.repository == 'lyswhut/any-listen' && startsWith(github.ref_name, 'desktop-')
     steps:
       - name: Checkout desktop app
         uses: actions/checkout@v6
@@ -38,7 +38,7 @@ jobs:
 
   sync-web-server:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref_name, 'webserver-')
+    if: github.repository == 'lyswhut/any-listen' && startsWith(github.ref_name, 'webserver-')
     steps:
       - name: Checkout web server
         uses: actions/checkout@v6

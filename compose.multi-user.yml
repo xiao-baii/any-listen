@@ -1,0 +1,19 @@
+services:
+  any-listen:
+    image: ghcr.io/xiao-baii/any-listen:${ANYLISTEN_TAG:-multi-user-local}
+    build:
+      context: .
+      dockerfile: Dockerfile.multi-user
+    ports:
+      - '127.0.0.1:9500:9500'
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:9500}
+      ACCOUNT_IDLE_MS: 300000
+    volumes:
+      - account-data:/data
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 2g
+
+volumes:
+  account-data:

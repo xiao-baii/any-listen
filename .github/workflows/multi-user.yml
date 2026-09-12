@@ -1,0 +1,64 @@
+name: Multi User
+on:
+  push:
+    branches: [multi-user]
+    tags: ['multi-user-v*']
+  pull_request:
+    branches: [multi-user]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      SKIP_LIB_COPY: '1'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -F @shared/eslint exec tsc -p ../../web-server/tsconfig.accounts.json
+      - run: SKIP_LIB_COPY= pnpm build:web
+      - run: node packages/web-server/tests/run.cjs
+      - name: Test supported official extensions
+        run: |
+          mkdir -p work/extension-packages/loader work/extension-packages/metadata
+          curl --fail --location --retry 3 https://github.com/any-listen/any-listen-extension-lx-api-source-loader/releases/download/v0.1.7/lx-api-source-loader_v0.1.7.alix -o work/loader.alix
+          curl --fail --location --retry 3 https://github.com/any-listen/any-listen-extension-online-metadata/releases/download/v0.4.4/online-metadata_v0.4.4.alix -o work/metadata.alix
+          echo 'c4bd2f58a63e8774ed329e1bec75cae45bbc3ac37dede40d73cece66dd862377  work/loader.alix' | sha256sum -c -
+          echo '3dd55d395b2150263e9db2db1e7141581149b4038e436e0d7286171fb2b3d787  work/metadata.alix' | sha256sum -c -
+          tar -xzf work/loader.alix -C work/extension-packages/loader
+          tar -xzf work/metadata.alix -C work/extension-packages/metadata
+          tar -xzf work/extension-packages/loader/ext.tgz -C work/extension-packages/loader
+          tar -xzf work/extension-packages/metadata/ext.tgz -C work/extension-packages/metadata
+          ACCOUNT_EXTENSION_PACKAGES="$PWD/work/extension-packages" node packages/web-server/tests/run.cjs extensions.test.ts
+      - run: pnpm -F @shared/scripts build:desktop
+  image:
+    needs: checks
+    if: github.repository == 'xiao-baii/any-listen' && startsWith(github.ref, 'refs/tags/multi-user-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.multi-user
+          push: true
+          tags: |
+            ghcr.io/xiao-baii/any-listen:${{ github.ref_name }}
+            ghcr.io/xiao-baii/any-listen:sha-${{ github.sha }}
