@@ -10,6 +10,7 @@
   },
   "references": [],
   "include": [
+    "../shared/nodejs/publicNetwork.ts",
     "src/accounts/database.ts",
     "src/accounts/gateway.ts",
     "src/accounts/runtime.ts",

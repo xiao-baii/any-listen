@@ -36,6 +36,7 @@ test(
       await once(gateway.server, 'listening')
       const origin = `http://127.0.0.1:${(gateway.server.address() as { port: number }).port}`
       const musicUrl = `http://127.0.0.1:${(media.address() as { port: number }).port}/fixture.mp3`
+      runtimes.allowedMediaOrigins = [new URL(musicUrl).origin]
       const password = 'Official-fixture-12345'
       const admin = await accounts.create('admin', password, 'admin', null)
       const user = await accounts.create('alice', password, 'user', admin.id)

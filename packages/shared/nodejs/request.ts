@@ -10,6 +10,8 @@ import {
   type Dispatcher,
 } from 'undici'
 
+import { publicNetworkAgent } from './publicNetwork'
+
 const defaultOptions: Options = {
   timeout: 15000,
   headers: {
@@ -31,7 +33,10 @@ const dispatchers = [
   // interceptors.responseError(),
 ] as const
 let proxyAgent: ProxyAgent | null = null
-let globalDispatcher = getGlobalDispatcher()
+const managedNetwork = Boolean(process.env.ANYLISTEN_USER_ID)
+let globalDispatcher = managedNetwork
+  ? publicNetworkAgent(JSON.parse(process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS ?? '[]'))
+  : getGlobalDispatcher()
 const buildDispatcher = (
   redirectDispatcher: Dispatcher.DispatcherComposeInterceptor | null,
   retryNum = defaultOptions.retryNum
@@ -59,6 +64,7 @@ const buildDispatcher = (
 setGlobalDispatcher(buildDispatcher(redirectDispatcher))
 
 export const setProxy = (url?: string) => {
+  if (managedNetwork && url) throw new Error('Outbound proxies are disabled in managed mode')
   proxyAgent = url ? new ProxyAgent(url) : null
   setGlobalDispatcher(buildDispatcher(redirectDispatcher))
 }

@@ -126,6 +126,7 @@ export class Publications {
     const validatorId = randomUUID()
     const validator = { ...admin, id: validatorId, role: 'user' as const }
     const check = new Runtimes(this.runtimes.root, this.runtimes.entry)
+    check.allowedMediaOrigins = this.runtimes.allowedMediaOrigins
     try {
       await this.runtimes.pauseStarts()
       active = [...this.runtimes.entries.values()].map((r) => r.user).filter((u) => u.role !== 'admin')

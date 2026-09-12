@@ -11,6 +11,8 @@ import Database from 'better-sqlite3'
 import { createMessage2Call } from 'message2call'
 import WebSocket from 'ws'
 
+import { interceptors } from '../../shared/nodejs/node_modules/undici'
+import { isPublicAddress, publicNetworkAgent } from '../../shared/nodejs/publicNetwork'
 import { Accounts } from '../src/accounts/database'
 import { createGateway } from '../src/accounts/gateway'
 import { migrate } from '../src/accounts/migration'
@@ -21,6 +23,56 @@ import { signIdentity, verifyIdentity, LoginLimiter } from '../src/accounts/secu
 const root = process.env.ACCOUNT_TEST_ROOT!
 const password = 'Test-password-12345'
 const workspace = () => mkdtemp(path.join(tmpdir(), 'any-listen-test-'))
+
+test('outbound media blocks private IPs, DNS and redirects, with exact-origin exceptions', async () => {
+  for (const address of [
+    '127.0.0.1',
+    '10.0.0.1',
+    '169.254.169.254',
+    '172.16.0.1',
+    '192.168.1.1',
+    '100.64.0.1',
+    '::1',
+    '::ffff:127.0.0.1',
+    'fc00::1',
+    'fe80::1',
+    '2002:7f00:1::',
+  ])
+    assert.equal(isPublicAddress(address), false, address)
+  for (const address of ['8.8.8.8', '2606:4700:4700::1111']) assert.equal(isPublicAddress(address), true)
+  let reached = 0
+  const target = http.createServer((_req, res) => {
+    reached++
+    res.end('private')
+  })
+  target.listen(0, '127.0.0.1')
+  await once(target, 'listening')
+  const targetOrigin = `http://127.0.0.1:${(target.address() as { port: number }).port}`
+  const redirect = http.createServer((_req, res) => {
+    res.writeHead(302, { Location: targetOrigin })
+    res.end()
+  })
+  redirect.listen(0, '127.0.0.1')
+  await once(redirect, 'listening')
+  const redirectOrigin = `http://127.0.0.1:${(redirect.address() as { port: number }).port}`
+  const agent = publicNetworkAgent([redirectOrigin])
+  try {
+    await assert.rejects(agent.request({ origin: targetOrigin, path: '/', method: 'GET' }), /Private network/)
+    await assert.rejects(
+      agent.request({ origin: targetOrigin.replace('127.0.0.1', 'localhost'), path: '/', method: 'GET' }),
+      /Private network/
+    )
+    await assert.rejects(
+      agent.compose(interceptors.redirect({ maxRedirections: 3 })).request({ origin: redirectOrigin, path: '/', method: 'GET' }),
+      /Private network/
+    )
+    assert.equal(reached, 0)
+  } finally {
+    await agent.close()
+    target.close()
+    redirect.close()
+  }
+})
 
 test('signed identities bind user, lifetime and process generation; login limiter', () => {
   const identity = { userId: 'A', sessionId: 'S', role: 'user' as const, expires: Date.now() + 10000 }
@@ -389,6 +441,10 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     media.listen(0, '127.0.0.1')
     await once(media, 'listening')
     const mediaUrl = `http://127.0.0.1:${(media.address() as { port: number }).port}/test.mp3`
+    const blockedMedia = await api(`/u/${alice.user.id}/api/p_url/${encodeURIComponent(mediaUrl)}`, alice.cookie)
+    assert.equal(blockedMedia.status, 500)
+    runtimes.allowedMediaOrigins = [new URL(mediaUrl).origin]
+    await runtimes.stop(alice.user.id)
     const proxyPath = `/u/${alice.user.id}/api/p_url/${encodeURIComponent(mediaUrl)}`
     const range = await fetch(origin + proxyPath, { headers: { Cookie: alice.cookie, Range: 'bytes=2-5' } })
     assert.equal(range.status, 206)

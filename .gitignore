@@ -56,6 +56,12 @@ typings/
 
 # dotenv environment variables file
 .env
+.env.*
+admin-password.txt
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+/data/
 
 # next.js build output
 .next

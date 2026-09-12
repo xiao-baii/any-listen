@@ -43,6 +43,7 @@ export class Runtimes {
     public entry: string,
     public idleMs = 300_000
   ) {}
+  allowedMediaOrigins: string[] = JSON.parse(process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS ?? '[]')
   async get(user: User, maintenance = false): Promise<Runtime> {
     if (!maintenance) await this.maintenance
     else this.failures.delete(user.id)
@@ -77,13 +78,16 @@ export class Runtimes {
     const dataPath = path.join(this.root, 'users', user.id)
     await mkdir(dataPath, { recursive: true })
     await mkdir(path.join(dataPath, 'imports'), { recursive: true })
+    await mkdir(path.join(dataPath, 'temp'), { recursive: true })
     const secret = newToken()
     const child = fork(this.entry, [], {
       env: {
         PATH: process.env.PATH,
         SystemRoot: process.env.SystemRoot,
-        TEMP: process.env.TEMP,
-        TMP: process.env.TMP,
+        TEMP: path.join(dataPath, 'temp'),
+        TMP: path.join(dataPath, 'temp'),
+        TMPDIR: path.join(dataPath, 'temp'),
+        ANYLISTEN_ALLOWED_MEDIA_ORIGINS: JSON.stringify(this.allowedMediaOrigins),
         NODE_ENV: 'production',
         DATA_PATH: dataPath,
         PORT: '0',
