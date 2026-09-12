@@ -7,6 +7,8 @@ services:
     environment:
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the website origin}
       ACCOUNT_IDLE_MS: 300000
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - account-data:/data
     restart: unless-stopped
@@ -14,5 +16,4 @@ services:
 
 volumes:
   account-data:
-    external: true
     name: any-listen-data

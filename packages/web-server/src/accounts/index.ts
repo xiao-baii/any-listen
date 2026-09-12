@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { getNativeName } from '@any-listen/nodejs'
 
+import { initializeAdmin } from './bootstrap'
 import { Accounts } from './database'
 import { createGateway } from './gateway'
 import { migrate } from './migration'
@@ -28,6 +29,12 @@ const main = async () => {
     await migrate(accounts, root, user.id, source, binding)
     accounts.close()
     return
+  }
+  try {
+    await initializeAdmin(accounts)
+  } catch (error) {
+    accounts.close()
+    throw error
   }
   await mkdir(path.join(root, 'users'), { recursive: true })
   const runtimes = new Runtimes(root, path.join(__dirname, 'index.js'), Number(process.env.ACCOUNT_IDLE_MS ?? 300_000))

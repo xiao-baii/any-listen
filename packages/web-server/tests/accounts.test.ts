@@ -13,6 +13,7 @@ import WebSocket from 'ws'
 
 import { interceptors } from '../../shared/nodejs/node_modules/undici'
 import { isPublicAddress, publicNetworkAgent } from '../../shared/nodejs/publicNetwork'
+import { initializeAdmin } from '../src/accounts/bootstrap'
 import { Accounts } from '../src/accounts/database'
 import { createGateway } from '../src/accounts/gateway'
 import { migrate } from '../src/accounts/migration'
@@ -23,6 +24,66 @@ import { signIdentity, verifyIdentity, LoginLimiter } from '../src/accounts/secu
 const root = process.env.ACCOUNT_TEST_ROOT!
 const password = 'Test-password-12345'
 const workspace = () => mkdtemp(path.join(tmpdir(), 'any-listen-test-'))
+
+test('startup initializes an empty database and preserves existing accounts across restarts', async () => {
+  const dir = await workspace()
+  let accounts = new Accounts(dir)
+  try {
+    for (const env of [
+      {},
+      { ADMIN_USERNAME: 'admin' },
+      { ADMIN_PASSWORD: password },
+      { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: 'short' },
+      { ADMIN_USERNAME: '!', ADMIN_PASSWORD: password },
+      { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: password, ADMIN_PASSWORD_FILE: 'unused' },
+    ]) {
+      await assert.rejects(initializeAdmin(accounts, env))
+      assert.equal(accounts.list().length, 0)
+      assert.equal(env.ADMIN_PASSWORD, undefined)
+    }
+    const env = { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: password }
+    await initializeAdmin(accounts, env)
+    assert.equal(env.ADMIN_PASSWORD, undefined)
+    const admin = accounts.find('admin')!
+    assert.equal(admin.role, 'admin')
+    assert.equal(admin.mustChangePassword, 1)
+    assert.notEqual(admin.passwordHash, password)
+    await accounts.login('admin', password, 'ip', 'browser')
+    await accounts.password(admin.id, password + '-changed', false, admin.id)
+    const changedHash = accounts.get(admin.id)!.passwordHash
+    accounts.close()
+    accounts = new Accounts(dir)
+    await initializeAdmin(accounts, {})
+    const staleEnv = { ADMIN_USERNAME: 'replacement', ADMIN_PASSWORD: password, ADMIN_PASSWORD_FILE: 'missing' }
+    await initializeAdmin(accounts, staleEnv)
+    assert.equal(staleEnv.ADMIN_PASSWORD, undefined)
+    assert.equal(staleEnv.ADMIN_PASSWORD_FILE, undefined)
+    assert.equal(accounts.list().length, 1)
+    assert.equal(accounts.get(admin.id)!.passwordHash, changedHash)
+    assert.equal(accounts.get(admin.id)!.mustChangePassword, 0)
+    await assert.rejects(accounts.login('admin', password, 'ip', 'browser'), /Invalid/)
+    await accounts.login('admin', password + '-changed', 'ip', 'browser')
+  } finally {
+    accounts.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('startup supports a password file and leaves the database empty on read failure', async () => {
+  const dir = await workspace(),
+    accounts = new Accounts(dir)
+  const passwordFile = path.join(dir, 'password.txt')
+  try {
+    await assert.rejects(initializeAdmin(accounts, { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD_FILE: passwordFile }))
+    assert.equal(accounts.list().length, 0)
+    await writeFile(passwordFile, password + '\n')
+    await initializeAdmin(accounts, { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD_FILE: passwordFile })
+    await accounts.login('admin', password, 'ip', 'browser')
+  } finally {
+    accounts.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
 
 test('outbound media blocks private IPs, DNS and redirects, with exact-origin exceptions', async () => {
   for (const address of [

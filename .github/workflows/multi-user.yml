@@ -65,7 +65,7 @@ jobs:
           docker load -i "$RUNNER_TEMP/any-listen-linux-amd64.tar"
           docker image inspect "any-listen:$IMAGE_TAG" --format '{{.Os}}/{{.Architecture}}'
           cp compose.image.yml "$RUNNER_TEMP/compose.image.yml"
-          printf 'ANYLISTEN_TAG=%s\nPUBLIC_ORIGIN=https://music.example.com\n' "$IMAGE_TAG" > "$RUNNER_TEMP/.env"
+          printf 'ANYLISTEN_TAG=%s\nPUBLIC_ORIGIN=https://music.example.com\nADMIN_USERNAME=admin\nADMIN_PASSWORD=\n' "$IMAGE_TAG" > "$RUNNER_TEMP/.env"
           cp docs/image-import.md "$RUNNER_TEMP/README.md"
           cd "$RUNNER_TEMP"
           sha256sum any-listen-linux-amd64.tar > SHA256SUMS

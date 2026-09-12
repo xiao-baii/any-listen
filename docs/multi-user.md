@@ -12,7 +12,30 @@
 docker compose -f compose.multi-user.yml build
 ```
 
-初始化管理员时服务应停止。将一个至少 12 字符、不超过 128 字符的初始密码放在仅管理员可读的本地文件 `admin-password.txt`，然后执行：
+首次启动会在空账号数据库中自动创建管理员。设置 `.env`：
+
+```dotenv
+PUBLIC_ORIGIN=https://music.example.com
+ANYLISTEN_TAG=multi-user-local
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD='这里换成你自己的初始密码'
+```
+
+用户名为 3 至 32 位英文字母、数字、点、下划线或连字符，首位须为字母或数字；密码为 12 至 128 个字符。`.env` 密码用单引号包围，避免 `$` 和 `#` 被解析，含单引号的密码可改用密码文件。Compose 自动创建或复用固定名称的 `any-listen-data` 卷，程序创建卷内目录。旧部署若使用项目名前缀的卷，先修改 Compose 的卷 `name` 指向原卷，避免误用空卷。
+
+```sh
+docker compose -f compose.multi-user.yml up -d
+```
+
+空数据库缺少有效初始化配置时启动失败，修正后重新部署。已有账号时跳过初始化，更改或移除环境变量不会覆盖密码。首次登录强制改密并重新登录，随后删除 `.env` 中的 `ADMIN_PASSWORD` 并重建容器。初始密码不打印到日志，但 Docker 管理员可查看容器环境变量。
+
+1Panel 导入镜像的完整流程见 [镜像文件部署](image-import.md)。
+
+### 可选：密码文件或手动初始化
+
+自动初始化也支持 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD_FILE`：在 Compose 挂载密码文件，设置容器内路径，并移除 `ADMIN_PASSWORD`。密码文件须让容器用户 UID 1000 可读。不能同时提供非空的 `ADMIN_PASSWORD` 和 `ADMIN_PASSWORD_FILE`。
+
+需要迁移旧数据或手动创建管理员时，仍可在服务停止状态下初始化。将初始密码放在仅管理员可读且容器用户可读取的本地文件 `admin-password.txt`，然后执行：
 
 ```sh
 docker compose -f compose.multi-user.yml run --rm --no-deps \
@@ -24,17 +47,6 @@ docker compose -f compose.multi-user.yml run --rm --no-deps \
 密码不进入命令参数、镜像或日志；初始化后移除密码文件。首次登录强制改密并重新登录。
 网站不提供公开注册。管理员在账号页面创建用户、重置密码、禁用或恢复账号。
 首次管理员已经存在时初始化命令拒绝执行；其他管理员通过账号管理创建。
-
-设置 `.env`（不含密码）：
-
-```dotenv
-PUBLIC_ORIGIN=https://music.example.com
-ANYLISTEN_TAG=multi-user-local
-```
-
-```sh
-docker compose -f compose.multi-user.yml up -d
-```
 
 Compose 默认仅绑定宿主机 `127.0.0.1:9500`，不设置容器内存上限，实际可用内存取决于宿主机和 Docker 运行环境。`PUBLIC_ORIGIN` 必须与浏览器地址的协议、主机和端口完全一致，不带尾部 `/`。
 HTTPS 时会话 Cookie 自动设置 Secure。直连本地测试可用 `http://localhost:9500`。
