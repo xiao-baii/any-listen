@@ -16,8 +16,8 @@ export const fail = (status: number, message: string): never => {
   throw new AccountError(status, message)
 }
 export const validatePassword = (password: unknown): string => {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128)
-    fail(400, 'Password must contain 12 to 128 characters')
+  if (typeof password !== 'string' || password.length < 1 || password.length > 128)
+    fail(400, 'Password must contain 1 to 128 characters')
   return password as string
 }
 export const hashPassword = async (password: string) => {

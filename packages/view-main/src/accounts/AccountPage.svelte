@@ -69,7 +69,7 @@
     <section><h2>{account.user.mustChangePassword ? '首次登录，请修改密码' : '修改密码'}</h2>
       <form onsubmit={(e) => { e.preventDefault(); void changePassword() }}>
         <label>当前密码<Input type="password" bind:value={password} /></label>
-        <label>新密码（12 至 128 位）<Input type="password" bind:value={newPassword} /></label>
+        <label>新密码（1 至 128 位）<Input type="password" bind:value={newPassword} /></label>
         <Btn rawtype="submit" disabled={busy}>修改密码</Btn>
       </form>
     </section>

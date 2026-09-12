@@ -33,7 +33,8 @@ test('startup initializes an empty database and preserves existing accounts acro
       {},
       { ADMIN_USERNAME: 'admin' },
       { ADMIN_PASSWORD: password },
-      { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: 'short' },
+      { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: '' },
+      { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: 'a'.repeat(129) },
       { ADMIN_USERNAME: '!', ADMIN_PASSWORD: password },
       { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: password, ADMIN_PASSWORD_FILE: 'unused' },
     ]) {
@@ -41,14 +42,14 @@ test('startup initializes an empty database and preserves existing accounts acro
       assert.equal(accounts.list().length, 0)
       assert.equal(env.ADMIN_PASSWORD, undefined)
     }
-    const env = { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: password }
+    const env = { ADMIN_USERNAME: 'admin', ADMIN_PASSWORD: 'a' }
     await initializeAdmin(accounts, env)
     assert.equal(env.ADMIN_PASSWORD, undefined)
     const admin = accounts.find('admin')!
     assert.equal(admin.role, 'admin')
     assert.equal(admin.mustChangePassword, 1)
     assert.notEqual(admin.passwordHash, password)
-    await accounts.login('admin', password, 'ip', 'browser')
+    await accounts.login('admin', 'a', 'ip', 'browser')
     await accounts.password(admin.id, password + '-changed', false, admin.id)
     const changedHash = accounts.get(admin.id)!.passwordHash
     accounts.close()
@@ -172,6 +173,31 @@ test('account passwords, case-insensitive names, forced rotation and last admin'
     const session = await accounts.login('alice', password, 'ip', 'browser')
     accounts.disable(user.id, true, admin.id)
     assert.equal(accounts.session(session.token), null)
+  } finally {
+    accounts.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('password creation and rotation accept 1 to 128 characters and reject empty or oversized values', async () => {
+  const dir = await workspace(),
+    accounts = new Accounts(dir)
+  try {
+    const admin = await accounts.create('admin', 'a', 'admin', null)
+    const user = await accounts.create('alice', 'b', 'user', admin.id)
+    for (const invalid of ['', 'a'.repeat(129)]) {
+      await assert.rejects(accounts.create('invalid', invalid, 'user', admin.id), /1 to 128/)
+      await assert.rejects(accounts.password(user.id, invalid, false, user.id), /1 to 128/)
+    }
+    for (const [value, force] of [
+      ['c', true],
+      ['d', false],
+      ['a'.repeat(128), false],
+    ] as const) {
+      await accounts.password(user.id, value, force, force ? admin.id : user.id)
+      const result = await accounts.login('alice', value, 'ip', 'browser')
+      assert.equal(result.user.mustChangePassword, Number(force))
+    }
   } finally {
     accounts.close()
     await rm(dir, { recursive: true, force: true })
