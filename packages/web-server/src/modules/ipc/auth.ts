@@ -4,6 +4,7 @@ import querystring from 'node:querystring'
 import { getProxyUrlKey } from '@any-listen/app/modules/proxyServer'
 import { IPC_CODE, PROXY_URL_KEY_COOKIE_NAME } from '@any-listen/common/constants'
 
+import { managed, identityFor } from '@/accounts/managed'
 // import { getUserSpace, getUserName, setUserName, createClientKeyInfo } from '@/user'
 import { checkClientInfo, createClientInfo, getServerName, getTokenSecret, saveClientInfo, updateLastActive } from '@/shared/data'
 import { toSha256 } from '@/shared/utils'
@@ -39,6 +40,17 @@ const verifyByCode = async (ctx: AnyListen.RequestContext, userPwd: string, pwd:
 }
 
 export const authCode = async (ctx: AnyListen.RequestContext, pwd: string) => {
+  if (managed) {
+    const identity = identityFor(ctx.req)
+    if (!identity) {
+      ctx.status = 401
+      return
+    }
+    ctx.set('token', 'managed-session')
+    ctx.status = 200
+    ctx.body = `${IPC_CODE.helloMsg}\n${encodeURIComponent(getServerName())}`
+    return
+  }
   let code = 401
   let msg: string = IPC_CODE.msgAuthFailed
 
@@ -88,6 +100,11 @@ export const authCode = async (ctx: AnyListen.RequestContext, pwd: string) => {
 }
 
 export const authConnect = async (req: http.IncomingMessage) => {
+  if (managed) {
+    const identity = identityFor(req)
+    if (!identity) throw new Error('Unauthorized')
+    return { clientId: identity.sessionId, timestamp: Date.now() }
+  }
   let ip: string | null | undefined = getIP(req)
   ip &&= getAvailableIP(ip)
   if (ip) {

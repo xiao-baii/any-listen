@@ -7,7 +7,8 @@
   },
   "main": "build-config/vite.config.ts",
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "test:accounts": "node tests/run.cjs"
   },
   "dependencies": {
     "@any-listen/app": "workspace:@shared/app@*",

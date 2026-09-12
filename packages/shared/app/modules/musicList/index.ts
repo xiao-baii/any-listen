@@ -26,16 +26,19 @@ let dbService: DBSeriveTypes
 let scrollInfo: Map<string, number>
 let getScrollInfo: () => Promise<AnyListen.List.ListPositionInfo>
 let saveScrollInfo: (scrollInfo: AnyListen.List.ListPositionInfo) => Promise<void>
+let validateAction: ((action: AnyListen.IPCList.ActionList) => void) | undefined
 
 export const initMusicList = async (
   _dbService: DBSeriveTypes,
   _getScrollInfo: typeof getScrollInfo,
-  _saveScrollInfo: typeof saveScrollInfo
+  _saveScrollInfo: typeof saveScrollInfo,
+  _validateAction?: typeof validateAction
 ) => {
   dbService = _dbService
   initMusicListEvent(_dbService)
   getScrollInfo = _getScrollInfo
   saveScrollInfo = _saveScrollInfo
+  validateAction = _validateAction
   await initLocalListProvider()
 }
 
@@ -144,6 +147,7 @@ const updateSongCount = async (listIds: string[]) => {
   }
 }
 export const sendMusicListAction = async (action: AnyListen.IPCList.ActionList) => {
+  validateAction?.(action)
   await musicListEvent.listAction(action)
   switch (action.action) {
     case 'list_music_overwrite':
@@ -261,14 +265,20 @@ export const syncUserList = async (id: string) => {
   }
 }
 
+let syncTaskTimer: ReturnType<typeof setTimeout> | undefined
+export const stopSyncUserListTask = () => {
+  clearTimeout(syncTaskTimer)
+  syncTaskTimer = undefined
+}
 export const runSyncUserListTask = () => {
+  stopSyncUserListTask()
   const now = new Date()
   const next = new Date(now)
   next.setHours(getRandom(11, 12), getRandom(0, 59), getRandom(0, 59), getRandom(0, 999))
   if (next.getTime() - now.getTime() <= 1800_000) next.setDate(next.getDate() + 1)
   const nextDelay = next.getTime() - now.getTime()
 
-  setTimeout(() => {
+  syncTaskTimer = setTimeout(() => {
     syncAllRemoteUserList()
     syncAllOnlineUserList()
 

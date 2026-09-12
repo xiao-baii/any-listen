@@ -1,10 +1,12 @@
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
+import { setImmediate as nextTurn } from 'node:timers/promises'
 
 import { IPC_CLOSE_CODE } from '@any-listen/common/constants'
 import type WS from 'ws'
 import { WebSocketServer } from 'ws'
 
+import { managed } from '@/accounts/managed'
 import { removeClientInfo } from '@/shared/data'
 import { appLog } from '@/shared/log4js'
 
@@ -131,7 +133,7 @@ wss.on('connection', (socket, request) => {
     if (typeof data != 'string') return
     socket.aliveTime = performance.now()
     void decryptMsg(socket.keyInfo, data)
-      .then((data) => {
+      .then(async (data) => {
         let syncData: unknown
         try {
           syncData = JSON.parse(data)
@@ -141,6 +143,8 @@ wss.on('connection', (socket, request) => {
           return
         }
         // socketEvent.message(socket, syncData)
+        // new_socket listeners are dispatched on setImmediate; retain the first client message.
+        if (!socket.onMessage) await nextTurn()
         socket.onMessage?.(syncData as string)
         // msg2call.message(syncData)
       })
@@ -271,5 +275,5 @@ export const getSockets = () => {
 }
 
 export const destroySockets = () => {
-  for (const client of wss.clients) client.close(IPC_CLOSE_CODE.normal)
+  for (const client of wss.clients) client.close(managed ? 1012 : IPC_CLOSE_CODE.normal)
 }

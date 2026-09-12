@@ -90,7 +90,19 @@ const auth = async (urlInfo: UrlInfo, serverId: string, authCode?: string) => {
 }
 
 export default async (urlInfo: UrlInfo, authCode?: string) => {
-  console.log('connect: ', urlInfo.href, authCode)
+  if (location.pathname.startsWith('/u/')) {
+    const response = await fetch('/account-api/me')
+    if (!response.ok) {
+      location.assign('/')
+      throw new Error('Session expired')
+    }
+    const { user } = await response.json()
+    if (user.mustChangePassword || !location.pathname.startsWith(`/u/${user.id}/`)) {
+      location.assign('/')
+      throw new Error('Session changed')
+    }
+    return { serverId: user.id, serverName: user.username, token: 'managed-session' }
+  }
   // console.log(buildIPCUrlPath(urlInfo, '/hello'))
   // if (!await hello(urlInfo)) throw new Error(IPC_CODE.connectServiceFailed)
   const serverId = await getServerId(urlInfo)

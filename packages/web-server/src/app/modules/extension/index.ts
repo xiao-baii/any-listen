@@ -1,9 +1,14 @@
+import { setTimeout as delay } from 'node:timers/promises'
+
 import { extensionEvent, extensionState, initExtensionModule } from '@any-listen/app/modules/extension'
 import { musicListEvent } from '@any-listen/app/modules/musicList'
+import { resourceState } from '@any-listen/app/modules/resources/shared'
 import { workers } from '@any-listen/app/modules/worker'
 import { DEFAULT_LANG, EXTENSION, STORE_NAMES } from '@any-listen/common/constants'
 import { checkAndCreateDir, joinPath, readFile } from '@any-listen/nodejs'
 
+import { verifyManagedExtensions } from '@/accounts/extensionHealth'
+import { managed, managedRole } from '@/accounts/managed'
 import { appEvent, appState } from '@/app/app'
 import { playerEvent } from '@/app/modules/player'
 import { startExtensionServiceWorker } from '@/app/worker'
@@ -41,10 +46,39 @@ const setupExtension = async () => {
     gHMirrorHosts: global.anylisten.config['extension.ghMirrorHosts'].join('\n'),
     enableDebug: appState.appSetting['common.enableDebug'],
   })
+  extensionEvent.setup(workers.extensionService)
   await initExtensionModule()
   await workers.extensionService.loadLocalExtensions()
+  const validate =
+    managed &&
+    managedRole() !== 'admin' &&
+    (await workers.extensionService.getLocalExtensionList()).some((e) => e.id === 'lx-api-source-loader')
+  if (validate) await workers.extensionService.clearExtensionLogs('lx-api-source-loader')
   await workers.extensionService.startExtensions()
-  extensionEvent.setup(workers.extensionService)
+  if (validate) await verifyManagedExtensions()
+  if (managed) {
+    // Upstream resource broadcasts are throttled; process readiness must include their result.
+    const extensions = await workers.extensionService.getLocalExtensionList()
+    for (let attempt = 0; ; attempt++) {
+      const resources = await workers.extensionService.getResourceList()
+      const ready = extensions
+        .filter((e) => e.loaded)
+        .every((e) =>
+          (e.contributes.resource ?? []).every((r) =>
+            r.resource.every((action) =>
+              resources.resources[action]?.some((item) => item.extensionId === e.id && item.id === r.id)
+            )
+          )
+        )
+      if (ready) {
+        extensionState.resources = resources
+        resourceState.resources = resources.resources
+        break
+      }
+      if (attempt >= 40) throw new Error('Extension resources did not become ready')
+      await delay(50)
+    }
+  }
 }
 export const initExtension = async () => {
   extensionState.extensionDir = joinPath(appState.dataPath, STORE_NAMES.EXTENSION)

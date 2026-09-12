@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "composite": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["@any-listen/nodejs/node_modules/@types/node"],
+    "paths": { "better-sqlite3": ["../shared/app/node_modules/@types/better-sqlite3/index.d.ts"] }
+  },
+  "references": [],
+  "include": [
+    "src/accounts/database.ts",
+    "src/accounts/gateway.ts",
+    "src/accounts/runtime.ts",
+    "src/accounts/migration.ts",
+    "src/accounts/publications.ts",
+    "src/accounts/security.ts",
+    "src/accounts/managed.ts"
+  ]
+}

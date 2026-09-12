@@ -75,6 +75,7 @@ export const updateIgnoreVersion = (version: string | null) => {
 }
 
 export const checkUpdate = async () => {
+  if (process.env.ANYLISTEN_USER_ID) return
   return update.checkForUpdates(appState.appSetting['common.tryAutoUpdate'])
 }
 

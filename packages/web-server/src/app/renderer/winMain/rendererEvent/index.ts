@@ -1,5 +1,6 @@
 import { createMessage2Call } from 'message2call'
 
+import { protectRpc } from '@/accounts/managed'
 import { socketEvent } from '@/modules/ipc/event'
 import type { ServerSocketWinMain } from '@/modules/ipc/websocket'
 import { appLog } from '@/shared/log4js'
@@ -67,7 +68,7 @@ export const init = () => {
   socketEvent.on('new_socket', (socket) => {
     if (socket.winType != 'main') return
     const msg2call = createMessage2Call<AnyListen.IPC.ClientCommonActions>({
-      exposeObj,
+      exposeObj: protectRpc(exposeObj),
       timeout: 0,
       isSendErrorStack: import.meta.env.DEV,
       sendMessage(data) {

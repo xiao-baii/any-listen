@@ -6,6 +6,13 @@ import { getNativeName } from '@any-listen/nodejs'
 import type { Target } from './utils'
 
 const rootPath = path.join(__dirname, '../../../../')
+const sqliteRoot = path.join(rootPath, 'packages/web-server/node_modules/better-sqlite3')
+const sqlitePlatform =
+  process.platform === 'linux' &&
+  !(process.report.getReport() as { header: { glibcVersionRuntime?: string } }).header.glibcVersionRuntime
+    ? 'linuxmusl'
+    : process.platform
+const sqlitePrebuild = path.join(sqliteRoot, 'prebuilds', `${sqlitePlatform}-${process.arch}.node`)
 
 const assetsAll = {
   desktop: {
@@ -38,7 +45,7 @@ const assetsAll = {
       [path.join(rootPath, 'packages/shared/theme/theme_images'), path.join(rootPath, 'build/public/theme_images')],
       [path.join(rootPath, 'packages/web-server/index.cjs'), path.join(rootPath, 'build/index.cjs')],
       !process.env.SKIP_LIB_COPY && [
-        path.join(rootPath, 'packages/web-server/node_modules/better-sqlite3/build/Release/better_sqlite3.node'),
+        fs.existsSync(sqlitePrebuild) ? sqlitePrebuild : path.join(sqliteRoot, 'build/Release/better_sqlite3.node'),
         path.join(rootPath, `build/native/${getNativeName()}/better_sqlite3.node`),
       ],
       // [

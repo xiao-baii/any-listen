@@ -3,6 +3,7 @@ import { writeProxyCache } from '@any-listen/app/modules/proxyServer'
 import { isUrl } from '@any-listen/common/utils'
 import { verifyResourceBoolean } from '@any-listen/nodejs/request'
 
+import { managed, managedRole } from '@/accounts/managed'
 import { appState } from '@/app/app'
 import { checkAllowPath, createMediaPublicPath, createPicPublicPath } from '@/app/modules/fileSystem'
 import { workers } from '@/app/worker'
@@ -19,6 +20,7 @@ export const getMusicUrl = async ({
   quality?: string
 }): Promise<AnyListen.IPCMusic.MusicUrlInfo | null> => {
   if (musicInfo.meta.deviceId !== appState.machineId) return null
+  if (managed && managedRole() !== 'admin') return null
   if (!isRefresh) {
     let filePath = await getLocalFilePath(musicInfo)
     if (filePath) {
@@ -68,6 +70,7 @@ export const getMusicPicUrl = async ({
   isRefresh?: boolean
 }): Promise<AnyListen.IPCMusic.MusicPicInfo | null> => {
   if (musicInfo.meta.deviceId !== appState.machineId) return null
+  if (managed && managedRole() !== 'admin') return null
   if (isRefresh && (!musicInfo.meta.picUrl || !(await verifyResourceBoolean(musicInfo.meta.picUrl)))) {
     isRefresh = false
   }
@@ -118,6 +121,7 @@ export const getLyricInfo = async ({
   isRefresh?: boolean
 }): Promise<AnyListen.IPCMusic.MusicLyricInfo | null> => {
   if (musicInfo.meta.deviceId !== appState.machineId) return null
+  if (managed && managedRole() !== 'admin') return null
   if (!isRefresh) {
     const [lyricInfo, fileLyricInfo] = await Promise.all([
       getCachedLyricInfo(musicInfo),

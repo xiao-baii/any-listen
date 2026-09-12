@@ -44,7 +44,8 @@ export const queryMetadataPlayListInfo = () => {
  * @param id
  */
 export const saveMetadataPlayListInfo = (id: string | null, source: AnyListen.Player.SourceType) => {
-  if (playListInfo.listId == id) return
+  initPlayListInfo()
+  if (playListInfo.listId == id && playListInfo.source === source) return
   playListInfo.listId = id
   playListInfo.source = source
   dbPrepare<string>(

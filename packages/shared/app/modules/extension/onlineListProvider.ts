@@ -14,6 +14,7 @@ const state = {
   syncing: false,
   waitingSyncLists: [] as AnyListen.List.OnlineListInfo[],
 }
+export const isSyncing = () => state.syncing || state.waitingSyncLists.length > 0
 
 const detailAll = async (list: AnyListen.List.OnlineListInfo) => {
   switch (list.meta.sourceType) {

@@ -14,6 +14,8 @@ import {
   syncUserList,
 } from '@any-listen/app/modules/musicList'
 
+import { validatePersonalData } from '@/accounts/backup'
+import { managed, managedRole } from '@/accounts/managed'
 import { getListsCover } from '@/app/modules/musicList'
 import { broadcast } from '@/modules/ipc/websocket'
 
@@ -38,6 +40,7 @@ export const createExposeList = () => {
       return checkListExistMusic(listId, musicId)
     },
     async listAction(event, action) {
+      if (managed && managedRole() !== 'admin') validatePersonalData(action)
       return sendMusicListAction(action)
     },
     async getListScrollPosition(event) {

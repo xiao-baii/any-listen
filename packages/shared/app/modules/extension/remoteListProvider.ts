@@ -118,6 +118,7 @@ const state = {
   syncing: false,
   waitingSyncLists: [] as AnyListen.List.RemoteListInfo[],
 }
+export const isSyncing = () => state.syncing || state.waitingSyncLists.length > 0
 export const syncList = async (list: AnyListen.List.RemoteListInfo) => {
   // logs.App.logcat.debug(`[Remote List]Sync: ${list.name} (${list.id})`)
   // console.log(`Sync list: ${list.name} (${list.id})`)

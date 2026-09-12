@@ -1,5 +1,6 @@
 import Koa from 'koa'
 
+import { managed, identityFor } from './accounts/managed'
 import createCors from './middleware/cors'
 import logHttp from './middleware/log-http'
 import reqInit from './middleware/req-init'
@@ -11,6 +12,15 @@ export const createServerApp = (config: AnyListen.Config) => {
   const app = new Koa()
 
   app.use(reqInit())
+  if (managed)
+    app.use(async (ctx, next) => {
+      if (!identityFor(ctx.req)) {
+        ctx.status = 401
+        return
+      }
+      await next()
+      ctx.set('Cache-Control', 'private, no-store')
+    })
 
   // http 日志
   if (config.httpLog) app.use(logHttp)

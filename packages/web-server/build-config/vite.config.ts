@@ -115,6 +115,7 @@ export const buildConfig = (mode: string): UserConfig => {
         ],
         input: {
           index: path.join(projectPath, 'src/index.ts'),
+          accounts: path.join(projectPath, 'src/accounts/index.ts'),
           'db-service.worker': path.join(rootPath, 'packages/shared/app/modules/worker/dbService/index.ts'),
           'util-service.worker': path.join(rootPath, 'packages/shared/app/modules/worker/utilService/index.ts'),
           'extension-service.worker': path.join(rootPath, 'packages/shared/app/modules/worker/extensionService/index.ts'),
@@ -132,6 +133,7 @@ export const buildConfig = (mode: string): UserConfig => {
       },
     },
     define: {
+      'process.env': 'process.env',
       'process.env.NODE_ENV': `"${process.env.NODE_ENV!}"`,
       'process.env.WS_NO_BUFFER_UTIL': 'true',
       'process.env.WS_NO_UTF_8_VALIDATE': 'true',

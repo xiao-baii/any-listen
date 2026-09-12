@@ -1,13 +1,27 @@
+import type { IncomingHttpHeaders } from 'node:http'
+
 import { logs } from '@any-listen/app/modules/logs'
 import { proxyRequest, proxyRequestByUrl, getProxyUrlKey } from '@any-listen/app/modules/proxyServer'
 import { PROXY_SERVER_PATH, PROXY_URL_PATH, PROXY_URL_KEY_COOKIE_NAME } from '@any-listen/common/constants'
 import type Router from '@koa/router'
 
+import { managed } from '@/accounts/managed'
+
 import { authConnect } from './ipc/auth'
+
+const mediaHeaders = (headers: IncomingHttpHeaders) => {
+  const result = { ...headers }
+  // Preserve the request identity for middleware; never forward it to a music origin.
+  if (managed)
+    for (const key of Object.keys(result)) {
+      if (key.startsWith('x-anylisten-') || key === 'authorization') delete result[key]
+    }
+  return result
+}
 
 export const registerProxyRouter = (router: Router<unknown, AnyListen.RequestContext>) => {
   router.get(`${PROXY_SERVER_PATH}/:name`, async (ctx, next) => {
-    const result = await proxyRequest(ctx.params.name, ctx.headers)
+    const result = await proxyRequest(ctx.params.name, mediaHeaders(ctx.headers))
     if (!result) {
       ctx.status = 404
       ctx.body = 'Not Found'
@@ -41,7 +55,7 @@ export const registerProxyRouter = (router: Router<unknown, AnyListen.RequestCon
     ctx.body = 'OK'
   })
   router.get(`${PROXY_URL_PATH}/:url`, async (ctx, next) => {
-    if (import.meta.env.PROD) {
+    if (import.meta.env.PROD && !managed) {
       if (ctx.cookies.get(PROXY_URL_KEY_COOKIE_NAME) !== (await getProxyUrlKey())) {
         ctx.status = 403
         ctx.body = 'Forbidden'
@@ -49,7 +63,7 @@ export const registerProxyRouter = (router: Router<unknown, AnyListen.RequestCon
       }
     }
     try {
-      const result = await proxyRequestByUrl(ctx.params.url, ctx.headers)
+      const result = await proxyRequestByUrl(ctx.params.url, mediaHeaders(ctx.headers))
       if (!result) {
         ctx.status = 404
         ctx.body = 'Not Found'
@@ -61,10 +75,7 @@ export const registerProxyRouter = (router: Router<unknown, AnyListen.RequestCon
       }
       ctx.body = result.body
     } catch (err) {
-      logs.ProxyService.logcat.error(
-        `proxyRequestByUrl error, url: ${ctx.params.url}, headers: ${JSON.stringify(ctx.headers)}`,
-        err
-      )
+      logs.ProxyService.logcat.error(`proxyRequestByUrl error, url: ${ctx.params.url}`, err)
       ctx.status = 500
       ctx.body = 'Internal Server Error'
     }

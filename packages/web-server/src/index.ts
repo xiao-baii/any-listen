@@ -9,6 +9,7 @@ import { extname } from '@any-listen/nodejs'
 
 import { ENV_PARAMS } from '@/shared/constants'
 
+import { managed, activeCalls } from './accounts/managed'
 import { printLogo } from './app/shared/utils'
 import { destroySockets, onUpgrade } from './modules/ipc/websocket'
 import { createServerApp } from './server'
@@ -32,7 +33,7 @@ const envParamKeys = Object.values(ENV_PARAMS)
       envParams[k] = v
       return true
     }),
-  ].map(([e, v]) => `${e}: ${v}`)
+  ].map(([e, v]) => `${e}: ${/PWD|TOKEN|SECRET|PROXY/i.test(e) ? '[redacted]' : v}`)
   if (envLog.length) console.log(`Load env: \n  ${envLog.join('\n  ')}`)
 }
 
@@ -121,8 +122,7 @@ global.anylisten.config.httpProxy = global.anylisten.config.httpProxy.replace(/h
 console.log(`Allowed Public Paths:
   ${global.anylisten.config.allowPublicDir.join('\n  ') || '  No Paths'}
 `)
-console.log(`Login Password: ${global.anylisten.config.password || 'No Password'}
-`)
+if (managed) global.anylisten.config.allowPublicDir = [process.env.ANYLISTEN_IMPORT_DIR! + path.sep]
 
 if (import.meta.env.DEV) {
   global.anylisten.config['cors.enabled'] = true
@@ -143,7 +143,7 @@ initServerData()
 function normalizePort(val: string) {
   const port = parseInt(val, 10)
 
-  if (isNaN(port) || port < 1) {
+  if (isNaN(port) || port < (managed ? 0 : 1)) {
     // named pipe
     exit(`port illegal: ${val}`)
   }
@@ -203,9 +203,18 @@ server.on('listening', async () => {
         process.exit()
       })
   }
-  void import('./app').then(({ initApp }) => {
-    void initApp()
-  })
+  try {
+    const { initApp } = await import('./app')
+    await initApp()
+    if (managed && typeof addr === 'object' && addr) {
+      process.send?.({ type: 'ready', port: addr.port })
+      const { busyTasks } = await import('./accounts/lifecycle')
+      setInterval(() => process.send?.({ type: 'metrics', rss: process.memoryUsage().rss, busy: busyTasks() }), 1000).unref()
+    }
+  } catch (error) {
+    startupLog.error('Application initialization failed', error)
+    process.exit(1)
+  }
 })
 
 server.on('upgrade', onUpgrade)
@@ -215,27 +224,28 @@ server.on('upgrade', onUpgrade)
  */
 server.listen(port, bindIP)
 
-process.on('SIGINT', () => {
-  startupLog.info('Received SIGINT. Shutting down gracefully...')
-  destroySockets()
-  server.close(() => {
-    startupLog.info('Server shut down successfully.')
-    process.exit(0)
+if (managed)
+  process.on('message', (message: { type?: string }) => {
+    if (message.type === 'shutdown') process.emit('SIGTERM')
   })
-  setTimeout(() => {
-    startupLog.error('Server shutdown timed out. Forcing exit...')
-    process.exit(1)
-  }, 2000)
-})
-process.on('SIGTERM', () => {
-  startupLog.info('Received SIGTERM. Shutting down gracefully...')
+
+let shuttingDown = false
+const shutdown = () => {
+  if (shuttingDown) return
+  shuttingDown = true
   destroySockets()
-  server.close(() => {
-    startupLog.info('Server shut down successfully.')
-    process.exit(0)
-  })
-  setTimeout(() => {
-    startupLog.error('Server shutdown timed out. Forcing exit...')
-    process.exit(1)
-  }, 2000)
-})
+  server.close()
+  const timeout = setTimeout(() => process.exit(1), managed ? 19_000 : 2000)
+  void (managed ? import('./accounts/lifecycle').then((m) => m.flushAccount()) : Promise.resolve())
+    .then(() => {
+      clearTimeout(timeout)
+      process.exit(0)
+    })
+    .catch((error) => {
+      startupLog.error('Account flush failed', error)
+      process.exit(1)
+    })
+}
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
+if (managed) process.on('disconnect', shutdown)

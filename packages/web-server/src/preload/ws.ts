@@ -103,7 +103,7 @@ const heartbeatTools = {
       throw new Error('connect error')
     }
 
-    if (this.isError) {
+    if (this.isError || location.pathname.startsWith('/u/')) {
       await handleAuth(client.data.urlInfo).catch((err: Error) => {
         console.log(err)
         if (err.message == IPC_CODE.msgAuthFailed) {
@@ -160,6 +160,10 @@ const heartbeatTools = {
   },
   handleClose(event: CloseEvent) {
     console.log(event.code)
+    if (event.code === 1012 && location.pathname.startsWith('/u/')) {
+      location.reload()
+      return
+    }
     switch (event.code) {
       case IPC_CLOSE_CODE.normal:
       case IPC_CLOSE_CODE.failed:
@@ -312,6 +316,12 @@ export const connect = async (
       }
     }
     client.logout = async function () {
+      if (location.pathname.startsWith('/u/')) {
+        const response = await fetch('/account-api/logout', { method: 'POST' })
+        if (!response.ok && response.status !== 401) throw new Error('Sign out failed')
+        location.assign('/')
+        return
+      }
       heartbeatTools.disconnect()
       await removeAuthKey(keyInfo.serverId)
       client?.close(IPC_CLOSE_CODE.logout)

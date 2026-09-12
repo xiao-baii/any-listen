@@ -7,6 +7,8 @@ import {
 } from '@any-listen/app/modules/musicList'
 import { STORE_NAMES } from '@any-listen/common/constants'
 
+import { validatePersonalData } from '@/accounts/backup'
+import { managed, managedRole } from '@/accounts/managed'
 import { appEvent } from '@/app/app'
 import getStore from '@/app/shared/store'
 import { workers } from '@/app/worker'
@@ -25,7 +27,8 @@ export const initMusicList = async () => {
     },
     async (info) => {
       getStore(STORE_NAMES.LIST_SCROLL_POSITION).override(info)
-    }
+    },
+    managed && managedRole() !== 'admin' ? validatePersonalData : undefined
   )
   musicListEvent.on('list_data_overwrite', async () => {
     clearListCoverCache()
