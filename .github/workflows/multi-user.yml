@@ -41,24 +41,44 @@ jobs:
       - run: pnpm -F @shared/scripts build:desktop
   image:
     needs: checks
-    if: github.repository == 'xiao-baii/any-listen' && startsWith(github.ref, 'refs/tags/multi-user-v')
+    if: github.repository == 'xiao-baii/any-listen' && (startsWith(github.ref, 'refs/tags/multi-user-v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/multi-user'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.multi-user
-          push: true
+          platforms: linux/amd64
+          push: false
+          outputs: type=docker,dest=${{ runner.temp }}/any-listen-linux-amd64.tar
           tags: |
-            ghcr.io/xiao-baii/any-listen:${{ github.ref_name }}
-            ghcr.io/xiao-baii/any-listen:sha-${{ github.sha }}
+            any-listen:${{ github.ref_name }}
+            any-listen:sha-${{ github.sha }}
+      - name: Verify exported image and prepare download
+        env:
+          IMAGE_TAG: ${{ github.ref_name }}
+        run: |
+          docker load -i "$RUNNER_TEMP/any-listen-linux-amd64.tar"
+          docker image inspect "any-listen:$IMAGE_TAG" --format '{{.Os}}/{{.Architecture}}'
+          cp compose.image.yml "$RUNNER_TEMP/compose.image.yml"
+          printf 'ANYLISTEN_TAG=%s\nPUBLIC_ORIGIN=https://music.example.com\n' "$IMAGE_TAG" > "$RUNNER_TEMP/.env"
+          cp docs/image-import.md "$RUNNER_TEMP/README.md"
+          cd "$RUNNER_TEMP"
+          sha256sum any-listen-linux-amd64.tar > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: any-listen-${{ github.ref_name }}-linux-amd64
+          path: |
+            ${{ runner.temp }}/any-listen-linux-amd64.tar
+            ${{ runner.temp }}/compose.image.yml
+            ${{ runner.temp }}/.env
+            ${{ runner.temp }}/README.md
+            ${{ runner.temp }}/SHA256SUMS
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

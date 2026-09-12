@@ -26,4 +26,4 @@ Scope: changes from upstream 80cce020, including gateway authentication, account
 - Desktop build passed before the final shared HTTP client changes. Repeat its build in CI.
 - Docker/Linux 2 GB load tests, production HTTPS proxy behavior and administrator-provided real LX scripts remain unverified.
 
-The multi-user GitHub workflow runs the account check, Web build, account tests, official extension test and desktop build. A branch push does not publish a container; only the custom release tag triggers GHCR publishing.
+The multi-user GitHub workflow runs the account check, Web build, account tests, official extension test and desktop build. Custom release tags and manual runs on multi-user export a Docker TAR to Actions artifacts. The workflow no longer logs in to or publishes to GHCR, and has no packages write permission.

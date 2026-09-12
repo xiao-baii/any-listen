@@ -146,8 +146,8 @@ git merge main
 ```
 
 合并后审查 RPC 允许列表、初始化顺序、资源 URL 前缀、扩展目录及配置结构，运行账号隔离、发布、迁移、Web 与桌面构建检查，再使用真实脚本验收并备份升级。
-`main` 只同步上游。自定义工作流仅在 `xiao-baii/any-listen` 的 `multi-user-v*` 标签通过检查后发布镜像至 `ghcr.io/xiao-baii/any-listen`，同时生成标签和 `sha-<完整提交>` 标签。
-上游 release 工作流限于原仓库执行。当前交付未推送、打远程标签或发布 GHCR 镜像。
+`main` 只同步上游。自定义工作流在 `xiao-baii/any-listen` 的 `multi-user-v*` 标签或手动运行 `multi-user` 分支通过检查后，导出 Linux AMD64 Docker TAR 至 Actions Artifacts，保留 30 天，不再推送 GHCR。镜像标签为 `any-listen:<标签或分支>` 和 `any-listen:sha-<完整提交>`。
+上游 release 工作流限于原仓库执行。1Panel 文件导入部署使用 `compose.image.yml`，详见 [镜像导入说明](image-import.md)；本文前面的 `compose.multi-user.yml` 仍用于源码本地构建。
 
 ## 发布前外部验收
 

@@ -1,0 +1,18 @@
+services:
+  any-listen:
+    image: any-listen:${ANYLISTEN_TAG:?Set ANYLISTEN_TAG to the imported image tag}
+    pull_policy: never
+    ports:
+      - '127.0.0.1:9500:9500'
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the website origin}
+      ACCOUNT_IDLE_MS: 300000
+    volumes:
+      - account-data:/data
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+volumes:
+  account-data:
+    external: true
+    name: any-listen-data
