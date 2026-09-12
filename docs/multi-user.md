@@ -36,7 +36,7 @@ ANYLISTEN_TAG=multi-user-local
 docker compose -f compose.multi-user.yml up -d
 ```
 
-Compose 默认仅绑定宿主机 `127.0.0.1:9500`，内存限制 2 GB。`PUBLIC_ORIGIN` 必须与浏览器地址的协议、主机和端口完全一致，不带尾部 `/`。
+Compose 默认仅绑定宿主机 `127.0.0.1:9500`，不设置容器内存上限，实际可用内存取决于宿主机和 Docker 运行环境。`PUBLIC_ORIGIN` 必须与浏览器地址的协议、主机和端口完全一致，不带尾部 `/`。
 HTTPS 时会话 Cookie 自动设置 Secure。直连本地测试可用 `http://localhost:9500`。
 反向代理必须支持 WebSocket、Range、关闭响应缓冲，并允许发布操作等待数分钟：
 
