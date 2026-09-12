@@ -3,6 +3,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 RUN corepack enable && corepack prepare pnpm@10.34.5 --activate
 WORKDIR /src
 COPY . .
+RUN test -s packages/view-main/.env.web && test -s packages/view-lyric/.env.web && test -s packages/web-server/.env.web
 ENV SKIP_LIB_COPY=1 ELECTRON_SKIP_BINARY_DOWNLOAD=1
 RUN pnpm install --frozen-lockfile
 RUN SKIP_LIB_COPY= pnpm build:web

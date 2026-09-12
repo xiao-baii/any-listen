@@ -10,6 +10,9 @@ data
 work
 **/.env
 **/.env.*
+!packages/view-main/.env.web
+!packages/view-lyric/.env.web
+!packages/web-server/.env.web
 **/admin-password.txt
 **/*.sqlite
 **/*.sqlite-wal
