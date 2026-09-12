@@ -6,6 +6,7 @@
   import { useExtensionError, useExtensionNewVersionNum } from '@/modules/extension/reactive.svelte'
   import { useOnlineResourceAvailable } from '@/views/Online/shared.svelte'
   import { toOnlineSearch } from '@/modules/resource/actions'
+  import { account } from '@/accounts/state.svelte'
 
   const lastPlayedUrl = `/library?id=${LIST_IDS.LAST_PLAYED}`
 
@@ -164,7 +165,7 @@
       {@render listItem(item)}
     {/if}
   {/each}
-  {@render extensonItem()}
+  {#if !account.enabled || account.user?.role === 'admin'}{@render extensonItem()}{/if}
 </ul>
 
 <style lang="less">

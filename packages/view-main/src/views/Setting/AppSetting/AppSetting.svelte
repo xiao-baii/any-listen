@@ -3,8 +3,10 @@
   import SettingList from './SettingList.svelte'
   import SettingView from './SettingView.svelte'
   import { settings } from './settings'
+  import { account } from '@/accounts/state.svelte'
 
-  const activeSetting = $derived(Object.values(settings).find((e) => e.id == $query.id) ?? settings[0])
+  const visibleSettings = $derived(account.enabled ? settings.filter((s) => !['security', 'update', 'backup', 'extension', 'network'].includes(s.id)) : settings)
+  const activeSetting = $derived(visibleSettings.find((e) => e.id == $query.id) ?? visibleSettings[0])
 </script>
 
 <div class="settings-app-container">

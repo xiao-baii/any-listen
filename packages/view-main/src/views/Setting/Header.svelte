@@ -4,13 +4,14 @@
   import { type ViewType, viewTypes } from './shared'
   import { useSettingValue } from '@/modules/setting/reactive.svelte'
   import { replace } from '@/plugins/routes'
+  import { account } from '@/accounts/state.svelte'
 
   const { activeview }: { activeview: ViewType } = $props()
   let langId = useSettingValue('common.langId')
   const viewList = $derived.by(() => {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     langId.val
-    return viewTypes.map((t) => {
+    return viewTypes.filter((t) => !account.enabled || account.user?.role === 'admin' || t === 'app').map((t) => {
       // return { id: t, label: i18n.t(`settings__type_logs`) }
       return { id: t, label: i18n.t(`settings__type_${t}`) }
     })

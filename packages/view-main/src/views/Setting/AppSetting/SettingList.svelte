@@ -4,6 +4,7 @@
   import type { SettingListSection } from './settings'
   import { verticalScrollbar } from '@/shared/compositions/verticalScrollbar.svelte'
   import { t } from '@/plugins/i18n'
+  import { account } from '@/accounts/state.svelte'
 
   let {
     active,
@@ -18,7 +19,7 @@
 
 <div class="settings-app-list">
   <div bind:this={domList} class="list" {@attach verticalScrollbar({ offset: '0', scrollbarWidth: '0.4rem' })}>
-    {#each settings as item (item.id)}
+    {#each settings.filter((s) => !account.enabled || !['security', 'update', 'backup', 'extension', 'network'].includes(s.id)) as item (item.id)}
       <div
         role="button"
         tabindex="0"

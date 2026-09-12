@@ -2,8 +2,9 @@
   import Header from './Header.svelte'
   import { query } from '@/plugins/routes'
   import { viewTypes } from './shared'
+  import { account } from '@/accounts/state.svelte'
 
-  const activeView = $derived<(typeof viewTypes)[number]>(viewTypes.find((t) => t == $query.type) ?? 'app')
+  const activeView = $derived<(typeof viewTypes)[number]>(account.enabled && account.user?.role !== 'admin' ? 'app' : viewTypes.find((t) => t == $query.type) ?? 'app')
 </script>
 
 <div class="view-container container">

@@ -3,10 +3,12 @@ export const LOCAL_STORE_KEYS = {
 } as const
 
 type LocalStoreKey = (typeof LOCAL_STORE_KEYS)[keyof typeof LOCAL_STORE_KEYS]
+const scopedKey = (key: LocalStoreKey) =>
+  import.meta.env.VITE_IS_WEB && location.pathname.startsWith('/u/') ? `${location.pathname.split('/')[2]}:${key}` : key
 export const getItem = (key: LocalStoreKey) => {
-  return localStorage.getItem(key)
+  return localStorage.getItem(scopedKey(key))
 }
 
 export const setItem = (key: LocalStoreKey, value: string) => {
-  localStorage.setItem(key, value)
+  localStorage.setItem(scopedKey(key), value)
 }

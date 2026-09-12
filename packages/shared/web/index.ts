@@ -113,7 +113,8 @@ export const buildUrl = (url: string, enableProxy: boolean, proxyServerHost: str
     return `http://localhost:9500${API_PREFIX}${PROXY_URL_PATH}/${encodeURIComponent(url)}`
   }
   if (!isUrl(url) || url.startsWith(location.origin)) return url
-  return `${location.origin}${API_PREFIX}${PROXY_URL_PATH}/${encodeURIComponent(url)}`
+  const accountPrefix = /^\/u\/[^/]+\//.exec(location.pathname)?.[0].slice(0, -1) ?? ''
+  return `${location.origin}${accountPrefix}${API_PREFIX}${PROXY_URL_PATH}/${encodeURIComponent(url)}`
 }
 
 export const checkPicUrl = async (picUrl: string | null | undefined, enableProxy: boolean, proxyServerHost: string) => {

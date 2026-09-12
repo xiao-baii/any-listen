@@ -1,5 +1,14 @@
 @import './assets/styles/index.less';
 
+html.web.multi-user, html.web.multi-user.fullscreen {
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  #app-main, #app-right, #view { min-width: 0; min-height: 0; }
+}
+
 html {
   height: 100vh;
 

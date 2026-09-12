@@ -1,4 +1,5 @@
 import { windowSizeList } from '@any-listen/common/constants'
+import { account } from '@/accounts/state.svelte'
 import { debounce } from '@any-listen/common/utils'
 
 import { setFullScreen, setRootOffset } from '@/modules/app/store/action'
@@ -42,7 +43,7 @@ const resetWindow = () => {
 }
 export const initWindowInfo = () => {
   const info = getWindowInfo()
-  if (info.isMaximized) {
+  if (account.enabled || info.isMaximized) {
     setFullScreen(true)
     setRootOffset(0, 0)
     resetWindow()
@@ -57,6 +58,7 @@ export const initWindowInfo = () => {
   document.body.style.top = `${info.offsetY}px`
 }
 export const setMaximized = (maximized: boolean) => {
+  if (account.enabled) return
   if (appState.isFullscreen == maximized) return
   setFullScreen(maximized)
   const info = getWindowInfo()
@@ -124,6 +126,7 @@ const windowMaximize = (dom: HTMLElement) => {
 }
 
 export const windowDarg = (dom: HTMLElement) => {
+  if (account.enabled) return () => {}
   const msEvent = {
     isMsDown: false,
     msDownX: 0,

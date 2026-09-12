@@ -94,6 +94,14 @@
 </div>
 
 <style lang="less">
+  @media (max-width: 600px) {
+    :global(html.multi-user) .header { flex-wrap: wrap; gap: 10px; }
+    :global(html.multi-user) .left { width: 64px; height: 64px; flex: none; }
+    :global(html.multi-user) .right { min-width: 0; width: calc(100% - 74px); padding-left: 0; }
+    :global(html.multi-user) .title { font-size: 18px; overflow-wrap: anywhere; }
+    :global(html.multi-user) .control-btns { gap: 8px; }
+    :global(html.multi-user) .control-btns .btns { flex-wrap: wrap; flex-shrink: 1; }
+  }
   .header {
     // height: 46px;
     display: flex;
