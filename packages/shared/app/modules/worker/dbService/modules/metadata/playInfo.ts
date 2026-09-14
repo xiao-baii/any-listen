@@ -1,8 +1,14 @@
+import { databaseState } from '../../context'
+
+const getState = () => databaseState('metadata/playInfo.ts', () => ({
+  playInfo: undefined as AnyListen.Player.SavedPlayInfo | undefined,
+}))
+
 import { dbPrepare } from '../../db'
 
-let playInfo: AnyListen.Player.SavedPlayInfo | undefined
+
 const init = () => {
-  if (playInfo !== undefined) return
+  if (getState().playInfo !== undefined) return
   const result = dbPrepare<[], { field_value: string }>(`
     SELECT "field_value"
     FROM "main"."metadata"
@@ -12,11 +18,11 @@ const init = () => {
   if (data) {
     try {
       const result = JSON.parse(data) as AnyListen.Player.SavedPlayInfo
-      playInfo = result
+      getState().playInfo = result
       return
     } catch {}
   }
-  playInfo = {
+  getState().playInfo = {
     index: -1,
     time: 0,
     maxTime: 0,
@@ -30,18 +36,18 @@ const init = () => {
  */
 export const queryMetadataPlayInfo = () => {
   init()
-  return playInfo!
+  return getState().playInfo!
 }
 /**
  * 保存播放信息
  * @param info
  */
 export const saveMetadataPlayInfo = (info: AnyListen.Player.SavedPlayInfo) => {
-  playInfo = info
+  getState().playInfo = info
   dbPrepare<string>(
     `
     INSERT INTO "main"."metadata" ("field_name", "field_value")
     VALUES ('play_info', ?)
   `
-  ).run(JSON.stringify(playInfo))
+  ).run(JSON.stringify(getState().playInfo))
 }

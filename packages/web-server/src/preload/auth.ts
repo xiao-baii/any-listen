@@ -97,7 +97,7 @@ export default async (urlInfo: UrlInfo, authCode?: string) => {
       throw new Error('Session expired')
     }
     const { user } = await response.json()
-    if (user.mustChangePassword || !location.pathname.startsWith(`/u/${user.id}/`)) {
+    if (!location.pathname.startsWith(`/u/${user.id}/`)) {
       location.assign('/')
       throw new Error('Session changed')
     }

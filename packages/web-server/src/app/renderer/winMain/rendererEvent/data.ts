@@ -7,7 +7,8 @@ import type { ExposeClientFunctions } from '.'
 import { updateIgnoreVersion } from '../autoUpdate'
 
 // 暴露给前端的方法
-export const createExposeData = () => {
+export const createExposeData = (store = getStore, state = appState, ignoreVersion = updateIgnoreVersion) => {
+  const getStore = store, appState = state, updateIgnoreVersion = ignoreVersion
   return {
     async getLastStartInfo(event) {
       return getStore(STORE_NAMES.DATA).get(DATA_KEYS.lastStartInfo)

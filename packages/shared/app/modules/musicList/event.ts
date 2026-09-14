@@ -1,14 +1,7 @@
 import { LIST_IDS } from '@any-listen/common/constants'
 import _Event, { type EventType } from '@any-listen/nodejs/Event'
 
-import { verifyListCreate, verifyListDelete, verifyListUpdate, verifyMusicRemove } from '../extension/remoteListProvider'
 import type { DBSeriveTypes } from '../worker/utils'
-import {
-  verifyLocalListCreate,
-  verifyLocalListDelete,
-  verifyLocalListMusicRemove,
-  verifyLocalListUpdate,
-} from './localListProvider'
 
 let dbService: DBSeriveTypes
 
@@ -28,6 +21,14 @@ let dbService: DBSeriveTypes
 // } from '@/workers/dbService/modules/list'
 
 export class Event extends _Event {
+  constructor(private readonly getDatabase: () => DBSeriveTypes = () => dbService) {
+    super()
+  }
+
+  private get database() {
+    return this.getDatabase()
+  }
+
   emitEvent<K extends keyof EventMethods>(eventName: K, ...args: unknown[]) {
     this.emit(eventName, ...args)
   }
@@ -46,8 +47,8 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_data_overwrite(listData: AnyListen.List.ListDataFull, isRemote = false) {
-    await dbService.breakChangeBackup()
-    await dbService.listDataOverwrite(listData)
+    await this.database.breakChangeBackup()
+    await this.database.listDataOverwrite(listData)
     this.emitEvent('list_data_overwrite', listData, isRemote)
     this.list_changed()
     // TODO: verifyListDataOverwrite local and remote
@@ -63,16 +64,16 @@ export class Event extends _Event {
     for (const list of lists) {
       switch (list.type) {
         case 'local':
-          await verifyLocalListCreate(list)
+          await import('./localListProvider').then((provider) => provider.verifyLocalListCreate(list))
           break
         case 'remote':
-          await verifyListCreate(list)
+          await import('../extension/remoteListProvider').then((provider) => provider.verifyListCreate(list))
           break
         default:
           break
       }
     }
-    await dbService.createUserLists(position, lists)
+    await this.database.createUserLists(position, lists)
     this.emitEvent('list_create', position, lists, isRemote)
     this.list_changed()
   }
@@ -83,23 +84,23 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_remove(ids: string[], isRemote = false) {
-    const userList = (await dbService.getAllUserLists()).userList
+    const userList = (await this.database.getAllUserLists()).userList
     for (const id of ids) {
       const targetList = userList.find((l) => l.id === id)
       if (targetList) {
         switch (targetList.type) {
           case 'local':
-            await verifyLocalListDelete(targetList)
+            await import('./localListProvider').then((provider) => provider.verifyLocalListDelete(targetList))
             break
           case 'remote':
-            await verifyListDelete(targetList)
+            await import('../extension/remoteListProvider').then((provider) => provider.verifyListDelete(targetList))
             break
           default:
             break
         }
       }
     }
-    await dbService.removeUserLists(ids)
+    await this.database.removeUserLists(ids)
     this.emitEvent('list_remove', ids, isRemote)
     this.list_changed()
   }
@@ -115,16 +116,16 @@ export class Event extends _Event {
       for (const list of lists) {
         switch (list.type) {
           case 'local':
-            await verifyLocalListUpdate(list)
+            await import('./localListProvider').then((provider) => provider.verifyLocalListUpdate(list))
             break
           case 'remote':
-            await verifyListUpdate(list)
+            await import('../extension/remoteListProvider').then((provider) => provider.verifyListUpdate(list))
             break
           default:
             break
         }
       }
-      await dbService.updateUserLists(lists)
+      await this.database.updateUserLists(lists)
     }
     this.emitEvent('list_update', lists, isSync, isRemote)
     this.list_changed()
@@ -138,7 +139,7 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_move(id: string | null, position: number, ids: string[], isRemote = false) {
-    await dbService.moveUserList(id, position, ids)
+    await this.database.moveUserList(id, position, ids)
     this.emitEvent('list_update', id, position, ids, isRemote)
     this.list_changed()
   }
@@ -150,7 +151,7 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_update_position(position: number, ids: string[], isRemote = false) {
-    await dbService.updateUserListsPosition(position, ids)
+    await this.database.updateUserListsPosition(position, ids)
     this.emitEvent('list_update_position', position, ids, isRemote)
     this.list_changed()
   }
@@ -165,9 +166,9 @@ export class Event extends _Event {
   //  * @param isRemote 是否属于远程操作
   //  */
   // async list_update_play_count(id: string, name: string, singer: string, count?: number, isRemote = false) {
-  //   await Promise.all([dbService.updateMetadataPlayCount(count),
-  //     count == null ? dbService.playCountAdd({ name, singer })
-  //       : dbService.playCountOverwrite({ name, singer, count })])
+  //   await Promise.all([this.database.updateMetadataPlayCount(count),
+  //     count == null ? this.database.playCountAdd({ name, singer })
+  //       : this.database.playCountOverwrite({ name, singer, count })])
   //   this.emitEvent('list_update_play_count', id, name, singer, isRemote)
   //   this.list_changed()
   // }
@@ -182,9 +183,9 @@ export class Event extends _Event {
   //  * @param isRemote 是否属于远程操作
   //  */
   // async list_update_play_time(id: string, name: string, singer: string, time: number, isAdd: boolean, isRemote = false) {
-  //   await Promise.all([dbService.updateMetadataPlayTime(time, isAdd),
-  //     isAdd ? dbService.playTimeAdd({ name, singer, time })
-  //       : dbService.playTimeOverwrite({ name, singer, time })])
+  //   await Promise.all([this.database.updateMetadataPlayTime(time, isAdd),
+  //     isAdd ? this.database.playTimeAdd({ name, singer, time })
+  //       : this.database.playTimeOverwrite({ name, singer, time })])
   //   this.emitEvent('list_update_play_time', id, name, singer, time, isAdd, isRemote)
   //   this.list_changed()
   // }
@@ -196,7 +197,7 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_music_overwrite(listId: string, musicInfos: AnyListen.Music.MusicInfo[], isRemote = false) {
-    await dbService.musicOverwrite(listId, musicInfos)
+    await this.database.musicOverwrite(listId, musicInfos)
     this.emitEvent('list_music_overwrite', listId, musicInfos, isRemote)
     this.list_music_changed([listId])
     this.list_changed()
@@ -215,7 +216,7 @@ export class Event extends _Event {
     addMusicLocationType: AnyListen.AddMusicLocationType,
     isRemote = false
   ) {
-    await dbService.musicsAdd(listId, musicInfos, addMusicLocationType)
+    await this.database.musicsAdd(listId, musicInfos, addMusicLocationType)
     this.emitEvent('list_music_add', listId, musicInfos, addMusicLocationType, isRemote)
     this.list_music_changed([listId])
     this.list_changed()
@@ -236,7 +237,7 @@ export class Event extends _Event {
     addMusicLocationType: AnyListen.AddMusicLocationType,
     isRemote = false
   ) {
-    await dbService.musicsMove(fromId, toId, musicInfos, addMusicLocationType)
+    await this.database.musicsMove(fromId, toId, musicInfos, addMusicLocationType)
     this.emitEvent('list_music_move', fromId, toId, musicInfos, addMusicLocationType, isRemote)
     this.list_music_changed([fromId, toId])
     this.list_changed()
@@ -258,19 +259,23 @@ export class Event extends _Event {
         case LIST_IDS.LAST_PLAYED:
           break
         default: {
-          const listInfo = await dbService.getUserListById(listId)
+          const listInfo = await this.database.getUserListById(listId)
           if (!listInfo) throw new Error('list not found')
           switch (listInfo.type) {
             case 'local':
-              await verifyLocalListMusicRemove(
+              await (
+                await import('./localListProvider')
+              ).verifyLocalListMusicRemove(
                 listInfo,
-                (await dbService.getListMusicsByIds(listId, ids)) as AnyListen.Music.MusicInfoLocal[]
+                (await this.database.getListMusicsByIds(listId, ids)) as AnyListen.Music.MusicInfoLocal[]
               )
               break
             case 'remote':
-              await verifyMusicRemove(
+              await (
+                await import('../extension/remoteListProvider')
+              ).verifyMusicRemove(
                 listInfo,
-                (await dbService.getListMusicsByIds(listId, ids)) as AnyListen.Music.MusicInfoOnline[]
+                (await this.database.getListMusicsByIds(listId, ids)) as AnyListen.Music.MusicInfoOnline[]
               )
               break
             default:
@@ -279,7 +284,7 @@ export class Event extends _Event {
         }
       }
     }
-    await dbService.musicsRemove(listId, ids)
+    await this.database.musicsRemove(listId, ids)
     this.emitEvent('list_music_remove', listId, ids, isSync, isRemote)
     this.list_music_changed([listId])
     this.list_changed()
@@ -291,7 +296,7 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_music_update(musicInfos: AnyListen.IPCList.ListActionMusicUpdate, isRemote = false) {
-    await dbService.musicsUpdate(musicInfos)
+    await this.database.musicsUpdate(musicInfos)
     this.emitEvent('list_music_update', musicInfos, isRemote)
     this.list_changed()
   }
@@ -303,7 +308,7 @@ export class Event extends _Event {
    * @param pic
    */
   async list_music_update_pic(listId: string, musicInfo: AnyListen.Music.MusicInfo) {
-    const newInfo = await dbService.musicPicUpdate(listId, musicInfo.id, musicInfo.meta.picUrl || '')
+    const newInfo = await this.database.musicPicUpdate(listId, musicInfo.id, musicInfo.meta.picUrl || '')
     const info: AnyListen.IPCList.ListActionMusicUpdate = [{ id: listId, musicInfo: newInfo || musicInfo }]
     this.emitEvent('list_music_update_pic', info, false)
     this.list_changed()
@@ -316,7 +321,7 @@ export class Event extends _Event {
    * @param musicInfo
    */
   async list_music_base_info_update(listId: string, musicInfos: AnyListen.Music.MusicInfo[]) {
-    const newInfos = await dbService.musicBaseInfosUpdate(listId, musicInfos)
+    const newInfos = await this.database.musicBaseInfosUpdate(listId, musicInfos)
     const info: AnyListen.IPCList.ListActionMusicUpdate = newInfos.map((musicInfo) => ({ id: listId, musicInfo }))
     this.emitEvent('list_music_update', info, false)
     this.list_changed()
@@ -329,7 +334,7 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_music_clear(ids: string[], isRemote = false) {
-    await dbService.musicsClear(ids)
+    await this.database.musicsClear(ids)
     this.emitEvent('list_music_clear', ids, isRemote)
     this.list_music_changed(ids)
     this.list_changed()
@@ -343,7 +348,7 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async list_music_update_position(listId: string, position: number, ids: string[], isRemote = false) {
-    await dbService.musicsPositionUpdate(listId, position, ids)
+    await this.database.musicsPositionUpdate(listId, position, ids)
     this.emitEvent('list_music_update_position', listId, position, ids, isRemote)
     this.list_changed()
   }

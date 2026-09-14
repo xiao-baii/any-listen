@@ -9,7 +9,7 @@ import { socketEvent } from '@/modules/ipc/event'
 import { appLog, logger } from '@/shared/log4js'
 import { checkAndCreateDir, removePath } from '@/shared/utils'
 
-import { version } from '../../../package.json' with { type: 'json' }
+import packageInfo from '../../../package.json' with { type: 'json' }
 import { i18n } from '../i18n'
 import { boxTools } from '../modules/extension/clientTools'
 import { getAppSetting, saveSetting } from './data'
@@ -21,7 +21,7 @@ const initState = () => {
   appState.envParams = {
     cmdParams: envParams.cmdParams,
   }
-  appState.version.version = version
+  appState.version.version = packageInfo.version
   appState.version.commit = __GIT_COMMIT__ || ''
   appState.version.commitDate = __GIT_COMMIT_DATE__ ? new Date(__GIT_COMMIT_DATE__).getTime() : 0
 }

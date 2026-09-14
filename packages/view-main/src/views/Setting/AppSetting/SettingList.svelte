@@ -19,7 +19,7 @@
 
 <div class="settings-app-list">
   <div bind:this={domList} class="list" {@attach verticalScrollbar({ offset: '0', scrollbarWidth: '0.4rem' })}>
-    {#each settings.filter((s) => !account.enabled || !['security', 'update', 'backup', 'extension', 'network'].includes(s.id)) as item (item.id)}
+    {#each settings.filter((s) => !account.enabled || !['security', 'update', 'backup', 'extension', 'network', 'onlineResource', 'dataSync'].includes(s.id)) as item (item.id)}
       <div
         role="button"
         tabindex="0"

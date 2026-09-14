@@ -66,7 +66,7 @@ declare namespace AnyListen {
       progress_downloaded: number
       progress_total: number
       url: string | null
-      quality: Music.Quality
+      quality: string
       ext: Download.FileExt
       fileName: string
       filePath: string

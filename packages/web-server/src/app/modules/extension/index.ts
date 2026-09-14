@@ -8,9 +8,11 @@ import { DEFAULT_LANG, EXTENSION, STORE_NAMES } from '@any-listen/common/constan
 import { checkAndCreateDir, joinPath, readFile } from '@any-listen/nodejs'
 
 import { verifyManagedExtensions } from '@/accounts/extensionHealth'
+import { usesSharedExtensions } from '@/accounts/extensionClient'
 import { managed, managedRole } from '@/accounts/managed'
 import { appEvent, appState } from '@/app/app'
-import { playerEvent } from '@/app/modules/player'
+import { getPlayerEvent } from '@/app/modules/player'
+import { initResources } from '@/app/modules/resources'
 import { startExtensionServiceWorker } from '@/app/worker'
 import { extensionLog } from '@/shared/log4js'
 
@@ -32,6 +34,14 @@ const handleExtensionLog = (info: AnyListen.Extension.LogInfo) => {
 }
 
 const setupExtension = async () => {
+  if (usesSharedExtensions) {
+    extensionEvent.setup(workers.extensionService)
+    await initExtensionModule({ onlineOnly: managed })
+    extensionState.resources = await workers.extensionService.getResourceList()
+    resourceState.resources = extensionState.resources.resources
+    await workers.extensionService.updateLocale(appState.appSetting['common.langId'] ?? DEFAULT_LANG)
+    return
+  }
   await workers.extensionService.setExtensionState({
     locale: appState.appSetting['common.langId'] ?? DEFAULT_LANG,
     'proxy.host': appState.proxy.host,
@@ -45,9 +55,10 @@ const setupExtension = async () => {
     onlineExtensionHost: appState.appSetting['extension.onlineExtensionHost'],
     gHMirrorHosts: global.anylisten.config['extension.ghMirrorHosts'].join('\n'),
     enableDebug: appState.appSetting['common.enableDebug'],
+    onlineOnly: managed,
   })
   extensionEvent.setup(workers.extensionService)
-  await initExtensionModule()
+  await initExtensionModule({ onlineOnly: managed })
   await workers.extensionService.loadLocalExtensions()
   const validate =
     managed &&
@@ -55,7 +66,7 @@ const setupExtension = async () => {
     (await workers.extensionService.getLocalExtensionList()).some((e) => e.id === 'lx-api-source-loader')
   if (validate) await workers.extensionService.clearExtensionLogs('lx-api-source-loader')
   await workers.extensionService.startExtensions()
-  if (validate) await verifyManagedExtensions()
+  if (validate) await verifyManagedExtensions(workers.extensionService)
   if (managed) {
     // Upstream resource broadcasts are throttled; process readiness must include their result.
     const extensions = await workers.extensionService.getLocalExtensionList()
@@ -106,11 +117,11 @@ export const initExtension = async () => {
         void workers.extensionService.updateEnableDebug(setting['common.enableDebug']!)
       } catch {}
     }
-    // if (keys.includes('extension.ghMirrorHosts')) {
-    //   try {
-    //     void workers.extensionService.updateGHMirrorHosts(setting['extension.ghMirrorHosts']!)
-    //   } catch {}
-    // }
+    if (managed && keys.includes('extension.ghMirrorHosts')) {
+      void workers.extensionService.updateGHMirrorHosts(setting['extension.ghMirrorHosts']!).catch((error) => {
+        extensionLog.error('Failed to update GitHub mirrors', error)
+      })
+    }
   })
   appEvent.on('locale_change', (locale) => {
     try {
@@ -132,17 +143,17 @@ export const initExtension = async () => {
   //     })
   //   } catch {}
   // })
-  playerEvent.on('playerEvent', (event) => {
+  getPlayerEvent().on('playerEvent', (event) => {
     try {
       void workers.extensionService.playerEvent(event)
     } catch {}
   })
-  playerEvent.on('playListAction', async (action) => {
+  getPlayerEvent().on('playListAction', async (action) => {
     try {
       void workers.extensionService.playListAction(action)
     } catch {}
   })
-  playerEvent.on('playHistoryListAction', async (action) => {
+  getPlayerEvent().on('playHistoryListAction', async (action) => {
     try {
       void workers.extensionService.playHistoryListAction(action)
     } catch {}
@@ -218,6 +229,7 @@ export const getLocalExtensionList = async () => {
 export const restartExtensionHost = async () => {
   await startExtensionServiceWorker()
   await setupExtension()
+  await initResources()
 }
 
 export const getExtensionErrorMessage = async () => {

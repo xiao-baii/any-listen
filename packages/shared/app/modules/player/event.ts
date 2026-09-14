@@ -5,6 +5,10 @@ import type { DBSeriveTypes } from '../worker/utils'
 let dbService: DBSeriveTypes
 
 export class Event extends _Event {
+  constructor(private readonly getDatabase: () => DBSeriveTypes = () => dbService) {
+    super()
+  }
+
   emitEvent<K extends keyof EventMethods>(eventName: K, ...args: unknown[]) {
     this.emit(eventName, ...args)
   }
@@ -14,6 +18,7 @@ export class Event extends _Event {
   }
 
   async playListAction(action: AnyListen.IPCPlayer.PlayListAction): Promise<void> {
+    const dbService = this.getDatabase()
     switch (action.action) {
       case 'set':
         await Promise.all([
@@ -51,6 +56,7 @@ export class Event extends _Event {
   }
 
   async playHistoryListAction(action: AnyListen.IPCPlayer.PlayHistoryListAction): Promise<void> {
+    const dbService = this.getDatabase()
     switch (action.action) {
       case 'setList':
         await dbService.setMetadataPlayHistoryList(action.data)

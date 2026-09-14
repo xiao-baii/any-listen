@@ -4,7 +4,8 @@ import { broadcast } from '@/modules/ipc/websocket'
 import type { ExposeClientFunctions, ExposeServerFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposeTheme = () => {
+export const createExposeTheme = (service = { getThemeList, getThemeSetting, removeTheme, saveTheme }) => {
+  const { getThemeList, getThemeSetting, removeTheme, saveTheme } = service
   return {
     async getThemeSetting(event) {
       return getThemeSetting()
@@ -22,7 +23,8 @@ export const createExposeTheme = () => {
 }
 
 // 暴露给后端的方法
-export const createServerTheme = () => {
+export const createServerTheme = (send = broadcast) => {
+  const broadcast = send
   return {
     async themeChanged(setting) {
       broadcast((socket) => {

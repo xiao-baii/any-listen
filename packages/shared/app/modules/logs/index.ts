@@ -28,6 +28,7 @@ const createLogcat = (logType: AnyListen.LogType) => {
       log(msg)
     } else {
       cache.push(msg)
+      if (cache.length > 200) cache.shift()
     }
     appLogEvent.logOutput(logType, msg)
   }

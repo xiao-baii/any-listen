@@ -7,7 +7,8 @@ import { broadcast } from '@/modules/ipc/websocket'
 import type { ExposeServerFunctions, ExposeClientFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposeHotkey = () => {
+export const createExposeHotkey = (service = { getHotKeyConfig, handleHotkeyConfigAction }) => {
+  const { getHotKeyConfig, handleHotkeyConfigAction } = service
   return {
     async getHotKey(event) {
       return getHotKeyConfig()
@@ -19,7 +20,8 @@ export const createExposeHotkey = () => {
 }
 
 // 暴露给前端的方法
-export const createServerHotkey = () => {
+export const createServerHotkey = (send = broadcast) => {
+  const broadcast = send
   return {
     async hotKeyConfigUpdated(config) {
       broadcast((socket) => {

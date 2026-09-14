@@ -2,6 +2,8 @@ import { DEFAULT_LANG, EXTENSION_ENGINE } from '@any-listen/common/constants'
 
 const empty = {}
 export const extensionState = {
+  onlineOnly: false,
+  draftOnly: false,
   version: EXTENSION_ENGINE,
   clientType: '' as AnyListen.ClientType,
   locale: DEFAULT_LANG as AnyListen.Locale,

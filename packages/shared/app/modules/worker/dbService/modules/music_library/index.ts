@@ -1,3 +1,45 @@
+import { databaseState, getDatabaseContext, getManagedDatabaseContexts } from '../../context'
+
+export const trimMusicListCache = () => {
+  if (!getDatabaseContext().managed) return
+  const cache = getState().musicLists
+  let songs = 0
+  for (const list of cache.values()) songs += list.length
+  for (const [id, list] of cache) {
+    if (cache.size <= 8 && songs <= 2000) break
+    songs -= list.length
+    cache.delete(id)
+  }
+  // ponytail: scan active account caches; use incremental accounting if this becomes a measured bottleneck.
+  const caches: Array<typeof cache> = []
+  let totalSongs = 0
+  let totalLists = 0
+  for (const context of getManagedDatabaseContexts()) {
+    const state = context.states.get('music_library/index.ts') as ReturnType<typeof getState> | undefined
+    if (!state) continue
+    caches.push(state.musicLists)
+    totalLists += state.musicLists.size
+    for (const list of state.musicLists.values()) totalSongs += list.length
+  }
+  for (const accountCache of caches) {
+    for (const [id, list] of accountCache) {
+      if (totalSongs <= 16_000 && totalLists <= 64) return
+      totalSongs -= list.length
+      totalLists--
+      accountCache.delete(id)
+    }
+  }
+}
+
+const getState = () => databaseState('music_library/index.ts', () => ({
+  defaultList: undefined as AnyListen.List.MyDefaultListInfo | undefined,
+  loveList: undefined as unknown as AnyListen.List.MyLoveListInfo,
+  lastPlayList: undefined as unknown as AnyListen.List.MyLastPlayListInfo,
+  userLists: [] as AnyListen.List.UserListInfo[],
+  musicLists: new Map<string, AnyListen.Music.MusicInfo[]>(),
+  rawPoss: new Map<string, number>(),
+}))
+
 import { LIST_IDS } from '@any-listen/common/constants'
 import { buildListDataFull } from '@any-listen/common/tools'
 import { arrPush, arrPushByPosition, arrUnshift } from '@any-listen/common/utils'
@@ -27,11 +69,11 @@ import {
 } from './dbHelper'
 import type { MusicInfo, MusicInfoOrder, QueryUserListInfo, UserListInfo } from './statements'
 
-let defaultList: AnyListen.List.MyDefaultListInfo | undefined
-let loveList: AnyListen.List.MyLoveListInfo
-let lastPlayList: AnyListen.List.MyLastPlayListInfo
-let userLists: AnyListen.List.UserListInfo[] = []
-let musicLists = new Map<string, AnyListen.Music.MusicInfo[]>()
+
+
+
+
+
 
 const toDBListInfo = (listInfos: AnyListen.List.MyListInfo[], offset = 0): UserListInfo[] => {
   return listInfos.map((info, index) => {
@@ -61,11 +103,11 @@ const toDBMusicInfo = (musicInfos: AnyListen.Music.MusicInfo[], listId: string, 
   })
 }
 
-let rawPoss = new Map<string, number>()
+
 const parseList = <T extends AnyListen.List.UserListInfo>(list: QueryUserListInfo) => {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   const { position, parent_id, song_count, ...newList } = list
-  rawPoss.set(list.id, position)
+  getState().rawPoss.set(list.id, position)
   const listInfo = {
     ...newList,
     parentId: parent_id,
@@ -114,20 +156,20 @@ const parseList = <T extends AnyListen.List.UserListInfo>(list: QueryUserListInf
 //   }
 // }
 const initListInfo = (force = false) => {
-  if (defaultList && !force) return
+  if (getState().defaultList && !force) return
   // userLists = []
   const defaultLists = queryDefaultList()
   for (const list of defaultLists) {
     const listInfo = parseList(list) as unknown
     switch (list.id) {
       case LIST_IDS.DEFAULT:
-        defaultList = listInfo as AnyListen.List.MyDefaultListInfo
+        getState().defaultList = listInfo as AnyListen.List.MyDefaultListInfo
         break
       case LIST_IDS.LOVE:
-        loveList = listInfo as AnyListen.List.MyLoveListInfo
+        getState().loveList = listInfo as AnyListen.List.MyLoveListInfo
         break
       case LIST_IDS.LAST_PLAYED:
-        lastPlayList = listInfo as AnyListen.List.MyLastPlayListInfo
+        getState().lastPlayList = listInfo as AnyListen.List.MyLastPlayListInfo
         break
       default:
         console.warn(`unknown list: ${list.name} id: ${list.id}`)
@@ -135,8 +177,8 @@ const initListInfo = (force = false) => {
     }
   }
 
-  rawPoss.clear()
-  userLists = queryAllUserList().map(parseList<AnyListen.List.UserListInfo>)
+  getState().rawPoss.clear()
+  getState().userLists = queryAllUserList().map(parseList<AnyListen.List.UserListInfo>)
 
   // const lists = queryAllList()
   // const newUserLists: Record<string, AnyListen.List.UserListInfo[]> = {
@@ -169,22 +211,22 @@ const initListInfo = (force = false) => {
   // userListMap = new Map(Object.entries(newUserLists))
 }
 const initUserList = (force = false) => {
-  if (!force && userLists.length) return
-  rawPoss.clear()
-  userLists = queryAllUserList().map(parseList<AnyListen.List.UserListInfo>)
+  if (!force && getState().userLists.length) return
+  getState().rawPoss.clear()
+  getState().userLists = queryAllUserList().map(parseList<AnyListen.List.UserListInfo>)
 }
 
 const filterUserLists = (parentId: UserListInfo['parent_id']) => {
-  return userLists.filter((l) => l.parentId === parentId)
+  return getState().userLists.filter((l) => l.parentId === parentId)
 }
 const overwriteUserList = (parentId: UserListInfo['parent_id'], lists: AnyListen.List.UserListInfo[]) => {
-  const newList = userLists.filter((l) => l.parentId !== parentId)
-  userLists = [...newList, ...lists]
+  const newList = getState().userLists.filter((l) => l.parentId !== parentId)
+  getState().userLists = [...newList, ...lists]
 }
 
 const getAllListInfo = () => {
   initListInfo()
-  return [defaultList!, loveList!, lastPlayList!, ...userLists]
+  return [getState().defaultList!, getState().loveList!, getState().lastPlayList!, ...getState().userLists]
 }
 
 /**
@@ -195,16 +237,16 @@ export const getAllUserLists = (): AnyListen.List.MyAllList => {
   initListInfo()
 
   return {
-    defaultList: defaultList!,
-    loveList,
-    lastPlayList,
-    userList: userLists,
+    defaultList: getState().defaultList!,
+    loveList: getState().loveList,
+    lastPlayList: getState().lastPlayList,
+    userList: getState().userLists,
   }
 }
 
 export const getUserListById = (id: string) => {
   initListInfo()
-  return userLists.find((l) => l.id === id)
+  return getState().userLists.find((l) => l.id === id)
 }
 
 /**
@@ -229,7 +271,7 @@ export const createUserLists = (position: number, lists: AnyListen.List.UserList
   if (position < 0 || position >= userLists.length) {
     // 如果是最末尾，那么取最后一个列表的原始位置 + 1 作为新列表的原始位置，否则新列表的原始位置为 position
     // 因为原始 pos 可能比 userLists.length 大，所以不能直接用 userLists.length 作为新列表的原始位置
-    const order = userLists.length ? (rawPoss.get(userLists.at(-1)!.id) ?? userLists.length) + 1 : 0
+    const order = userLists.length ? (getState().rawPoss.get(userLists.at(-1)!.id) ?? userLists.length) + 1 : 0
     const newLists = toDBListInfo(lists, order)
     inertUserLists(parentId, newLists)
   } else {
@@ -271,7 +313,7 @@ export const removeUserLists = (ids: string[]) => {
   const subIds = ids.map((id) => getAllSubListIds(id)).flat()
   const allIds = [...ids, ...subIds]
   deleteUserLists(allIds)
-  for (const id of allIds) if (musicLists.has(id)) musicLists.delete(id)
+  for (const id of allIds) if (getState().musicLists.has(id)) getState().musicLists.delete(id)
   initUserList(true)
 }
 
@@ -293,7 +335,7 @@ export const updateUserLists = (lists: AnyListen.List.MyListInfo[]) => {
  */
 export const moveUserList = (toId: UserListInfo['parent_id'], position: number, ids: string[]) => {
   initListInfo()
-  const targetInfo = userLists.find((l) => l.id == toId)
+  const targetInfo = getState().userLists.find((l) => l.id == toId)
   if (!targetInfo) throw new Error('to id not found')
 
   const targetList = filterUserLists(toId)
@@ -301,8 +343,8 @@ export const moveUserList = (toId: UserListInfo['parent_id'], position: number, 
   const updateLists: AnyListen.List.UserListInfo[] = []
   const now = Date.now()
   let count = 0
-  let step = 1 / userLists.length
-  for (const info of userLists) {
+  let step = 1 / getState().userLists.length
+  for (const info of getState().userLists) {
     const idx = ids.indexOf(info.id)
     if (idx < 0) continue
     ids.splice(idx, 1)
@@ -327,7 +369,7 @@ export const updateUserListsPosition = (position: number, ids: string[]) => {
   if (!ids.length) return
   initListInfo()
   const id = ids[0]
-  const targetInfo = userLists.find((l) => l.id == id)
+  const targetInfo = getState().userLists.find((l) => l.id == id)
   if (!targetInfo) throw new Error(`${id} not found`)
   const targetList = filterUserLists(targetInfo.parentId)
 
@@ -355,7 +397,7 @@ export const updateUserListsPosition = (position: number, ids: string[]) => {
  * @returns 列表内歌曲
  */
 export const getListMusics = (listId: string): AnyListen.Music.MusicInfo[] => {
-  let targetList: AnyListen.Music.MusicInfo[] | undefined = musicLists.get(listId)
+  let targetList: AnyListen.Music.MusicInfo[] | undefined = getState().musicLists.get(listId)
   if (targetList == null) {
     targetList = queryMusicInfoByListId(listId).map((info) => {
       return {
@@ -367,7 +409,10 @@ export const getListMusics = (listId: string): AnyListen.Music.MusicInfo[] => {
         meta: JSON.parse(info.meta),
       }
     })
-    musicLists.set(listId, targetList)
+    getState().musicLists.set(listId, targetList)
+  } else {
+    getState().musicLists.delete(listId)
+    getState().musicLists.set(listId, targetList)
   }
 
   return targetList
@@ -380,8 +425,7 @@ const updateSongCount = (listId: string, count: number) => {
 }
 
 export const getListMusicsByIds = (listId: string, ids: string[]) => {
-  const list = musicLists.get(listId)
-  if (!list) return []
+  const list = getListMusics(listId)
   const idSet = new Set(ids)
   return list.filter((m) => idSet.has(m.id))
 }
@@ -414,7 +458,7 @@ export const musicsAdd = (
   addMusicLocationType: AnyListen.AddMusicLocationType
 ) => {
   initUserList()
-  if (![LIST_IDS.DEFAULT, LIST_IDS.LOVE, LIST_IDS.LAST_PLAYED, ...userLists.map((l) => l.id)].includes(listId)) {
+  if (![LIST_IDS.DEFAULT, LIST_IDS.LOVE, LIST_IDS.LAST_PLAYED, ...getState().userLists.map((l) => l.id)].includes(listId)) {
     throw new Error(`listId ${listId} not found`)
   }
   let targetList = getListMusics(listId)
@@ -461,7 +505,7 @@ export const musicsRemove = (listId: string, ids: string[]) => {
   removeMusicInfos(listId, ids)
   const idsSet = new Set<string>(ids)
   const newList = targetList.filter((mInfo) => !idsSet.has(mInfo.id))
-  musicLists.set(listId, newList)
+  getState().musicLists.set(listId, newList)
   updateSongCount(listId, newList.length)
 }
 
@@ -516,7 +560,7 @@ export const musicsMove = (
 
   listSet = new Set<string>(ids)
   const newFromList = fromList.filter((mInfo) => !listSet.has(mInfo.id))
-  musicLists.set(fromId, newFromList)
+  getState().musicLists.set(fromId, newFromList)
   updateSongCount(fromId, newFromList.length)
   updateSongCount(toId, toList.length)
 }
@@ -541,7 +585,7 @@ export const musicsUpdate = (musicInfos: AnyListen.IPCList.ListActionMusicUpdate
     })
   )
   for (const { id, musicInfo } of musicInfos) {
-    const targetList = musicLists.get(id)
+    const targetList = getState().musicLists.get(id)
     if (targetList == null) continue
     const targetMusic = targetList.find((item) => item.id == musicInfo.id)
     if (!targetMusic) continue
@@ -580,10 +624,10 @@ export const musicsUpdateLastPlayedList = (musicInfos: AnyListen.IPCList.ListAct
  * @param picUrl 图片Url
  */
 export const musicPicUpdate = (listId: string, musicId: string, picUrl: string) => {
-  let targetList = musicLists.get(listId)
+  let targetList = getState().musicLists.get(listId)
   if (!targetList) {
     targetList = getListMusics(listId)
-    musicLists.set(listId, targetList)
+    getState().musicLists.set(listId, targetList)
   }
   const musicInfo = targetList.find((item) => item.id == musicId)
   if (!musicInfo) return
@@ -597,10 +641,10 @@ export const musicPicUpdate = (listId: string, musicId: string, picUrl: string) 
  * @param musicInfos 歌曲&列表信息
  */
 export const musicBaseInfosUpdate = (listId: string, musicInfos: AnyListen.Music.MusicInfo[]) => {
-  let targetList = musicLists.get(listId)
+  let targetList = getState().musicLists.get(listId)
   if (!targetList) {
     targetList = getListMusics(listId)
-    musicLists.set(listId, targetList)
+    getState().musicLists.set(listId, targetList)
   }
   const infosMap = new Map<string, AnyListen.Music.MusicInfo>()
   for (const item of musicInfos) infosMap.set(item.id, item)
@@ -623,9 +667,8 @@ export const musicBaseInfosUpdate = (listId: string, musicInfos: AnyListen.Music
 export const musicsClear = (ids: string[]) => {
   removeMusicInfoByListId(ids)
   for (const id of ids) {
-    const targetList = musicLists.get(id)
-    if (!targetList) continue
-    targetList.splice(0, targetList.length)
+    const targetList = getState().musicLists.get(id)
+    targetList?.splice(0, targetList.length)
     updateSongCount(id, 0)
   }
 }
@@ -669,7 +712,7 @@ export const musicsPositionUpdate = (listId: string, position: number, ids: stri
     })
   )
   updateMusicInfos(toDBMusicInfo(infos, listId))
-  musicLists.set(listId, newTargetList)
+  getState().musicLists.set(listId, newTargetList)
 }
 
 /**
@@ -711,11 +754,11 @@ export const listDataOverwrite = (myListData: AnyListen.List.ListDataFull) => {
     )
   )
 
-  musicLists.clear()
-  musicLists.set(LIST_IDS.DEFAULT, listData.defaultList.list)
-  musicLists.set(LIST_IDS.LOVE, listData.loveList.list)
+  getState().musicLists.clear()
+  getState().musicLists.set(LIST_IDS.DEFAULT, listData.defaultList.list)
+  getState().musicLists.set(LIST_IDS.LOVE, listData.loveList.list)
   // musicLists.set(LIST_IDS.LAST_PLAYED, listData.lastPlayList.list)
-  for (const list of listData.userList) musicLists.set(list.id, list.list)
+  for (const list of listData.userList) getState().musicLists.set(list.id, list.list)
 
   initListInfo(true)
 }
@@ -758,14 +801,14 @@ export const getAllListData = (): AnyListen.List.ListDataFull => {
 
   const lists = {
     defaultList: {
-      ...defaultList!,
+      ...getState().defaultList!,
       list: getListMusics(LIST_IDS.DEFAULT),
     },
-    loveList: { ...loveList!, list: getListMusics(LIST_IDS.LOVE) },
+    loveList: { ...getState().loveList!, list: getListMusics(LIST_IDS.LOVE) },
     userList: [] as AnyListen.List.UserListInfoFull[],
   }
 
-  for (const list of userLists) {
+  for (const list of getState().userLists) {
     lists.userList.push({ ...list, list: getListMusics(list.id) })
   }
 

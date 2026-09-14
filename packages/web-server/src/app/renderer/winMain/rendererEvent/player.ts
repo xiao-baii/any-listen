@@ -1,17 +1,22 @@
-import { onPlayHistoryListAction, onPlayListAction } from '@any-listen/app/modules/player'
+import { validatePersonalData } from '@/accounts/backup'
+import { managed } from '@/accounts/managed'
 
-import { getPlayInfo, playerEvent } from '@/app/modules/player'
+import { getPlayInfo, getPlayerEvent } from '@/app/modules/player'
 import { broadcast } from '@/modules/ipc/websocket'
 
 import type { ExposeClientFunctions, ExposeServerFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposePlayer = () => {
+export const createExposePlayer = (service = { getPlayInfo, getPlayerEvent }, onlineOnly = managed) => {
+  const { getPlayInfo, getPlayerEvent } = service
+  const managed = onlineOnly
+  const playerEvent = getPlayerEvent()
   return {
     async getPlayInfo(event) {
       return getPlayInfo()
     },
     async playerEvent(event, pEvent): Promise<void> {
+      if (managed) validatePersonalData(pEvent)
       switch (pEvent.action) {
         case 'musicChanged':
           playerEvent.musicChanged(pEvent.data.index, pEvent.data.historyIndex, pEvent.data.lastTrackId)
@@ -53,6 +58,7 @@ export const createExposePlayer = () => {
       playerEvent.playerEvent(pEvent)
     },
     async playListAction(event, action) {
+      if (managed) validatePersonalData(action)
       return playerEvent.playListAction(action)
     },
     async playHistoryListAction(event, action) {
@@ -62,7 +68,8 @@ export const createExposePlayer = () => {
 }
 
 // 暴露给后端的方法
-export const createServerPlayer = () => {
+export const createServerPlayer = (send = broadcast, event = getPlayerEvent(), subscriptions?: Array<() => void>) => {
+  const broadcast = send
   const actions = {
     async playerAction(action) {
       broadcast((socket) => {
@@ -85,9 +92,10 @@ export const createServerPlayer = () => {
   } satisfies Partial<ExposeServerFunctions>
 
   // eslint-disable-next-line @typescript-eslint/unbound-method
-  onPlayListAction(actions.playListAction)
+  const offList = event.on('playListAction', actions.playListAction)
   // eslint-disable-next-line @typescript-eslint/unbound-method
-  onPlayHistoryListAction(actions.playHistoryListAction)
+  const offHistory = event.on('playHistoryListAction', actions.playHistoryListAction)
+  subscriptions?.push(offList, offHistory)
 
   return actions
 }

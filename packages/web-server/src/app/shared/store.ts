@@ -1,13 +1,14 @@
-import fs from 'node:fs'
-// import { writeFileSync } from 'atomically'
-import path from 'node:path'
+import type Store from '@any-listen/nodejs/Store'
 
-import Store from '@any-listen/nodejs/Store'
-
+import { createAccountStores } from '@/accounts/stores'
 import { appState } from '@/app/app'
 import { log } from '@/app/shared/log'
 
-const stores = new Map<string, Store>()
+let stores: ReturnType<typeof createAccountStores> | undefined
+export const closeStores = () => {
+  stores?.close()
+  stores = undefined
+}
 
 /**
  * 获取 Store 对象
@@ -17,29 +18,8 @@ const stores = new Map<string, Store>()
  * @returns Store
  */
 export default (name: string, isIgnoredError = true, isShowErrorAlert = true): Store => {
-  if (stores.has(name)) return stores.get(name)!
-  let store: Store
-  const storePath = path.join(appState.dataPath, `${name}.json`)
-  try {
-    stores.set(name, (store = new Store(storePath, false)))
-  } catch (err) {
-    const error = err as Error
-    log.error(error)
-
-    if (!isIgnoredError) throw error
-
-    const backupPath = `${storePath}.bak`
-    fs.renameSync(storePath, backupPath)
-    if (isShowErrorAlert) {
-      log.warn(`${name} data load error`)
-      log.warn(
-        `We have helped you back up the old ${name} file to: ${backupPath}\nYou can try to repair and restore it manually\n\nError detail: ${error.message}`
-      )
-    }
-
-    store = new Store(storePath, true)
-  }
-  return store
+  stores ??= createAccountStores(appState.dataPath, log)
+  return stores.get(name, isIgnoredError, isShowErrorAlert)
 }
 
 export type { Store }

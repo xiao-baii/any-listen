@@ -6,6 +6,7 @@
   import { EXTENSION } from '@any-listen/common/constants'
   import { showNotify } from '@/components/apis/notify'
   import { extensionState } from '@/modules/extension/store/state'
+  import { account } from '@/accounts/state.svelte'
 
   const handleInstallLocal = async () => {
     const { canceled, filePaths } = await showOpenDialog({
@@ -47,7 +48,7 @@
 </script>
 
 <div class="header-actions">
-  <Btn onclick={handleInstallLocal} min>{$t('extension.header.actions.install_local')}</Btn>
+  {#if account.enabled}<a href="/accounts">音源发布</a>{:else}<Btn onclick={handleInstallLocal} min>{$t('extension.header.actions.install_local')}</Btn>{/if}
 </div>
 
 <style lang="less">

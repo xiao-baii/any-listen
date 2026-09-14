@@ -1,39 +1,47 @@
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { STORE_NAMES } from '@any-listen/common/constants'
-import AsyncFS from '@any-listen/nodejs/AsyncFS'
 
-let time = 0
-let asyncFS: AsyncFS
-let initState = 0
-let dataPath: string
-
-export const initPlayTimeStore = (_dataPath: string) => {
-  dataPath = _dataPath
-}
-
-const init = async () => {
-  if (initState != 0) return
-  initState = 1
-  if (!dataPath) throw new Error('Data path is not set')
-  asyncFS = new AsyncFS(path.join(dataPath, STORE_NAMES.PLAY_TIME), { safeWrite: false })
-  const data = await asyncFS.readFile()
-  if (data) {
-    time = parseInt(data.toString())
-    if (Number.isNaN(time)) time = 0
+export const createPlayTimeStore = (getDataPath: () => string) => {
+  let time = 0
+  let loading: Promise<void> | undefined
+  let writing = Promise.resolve()
+  const file = () => {
+    const directory = getDataPath()
+    if (!directory) throw new Error('Data path is not set')
+    return path.join(directory, STORE_NAMES.PLAY_TIME)
   }
-  // eslint-disable-next-line require-atomic-updates
-  initState = 2
+  const init = () =>
+    (loading ??= readFile(file(), 'utf8')
+      .then((data) => {
+        const value = parseInt(data)
+        time = Number.isNaN(value) ? 0 : value
+      })
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') {
+          loading = undefined
+          throw error
+        }
+      }))
+  return {
+    async getPlayTime() {
+      await init()
+      return time
+    },
+    async savePlayTime(value: number) {
+      await init()
+      time = value
+      // Serialize writes so an older progress update cannot overwrite a newer one.
+      const next = writing.catch(() => {}).then(() => writeFile(file(), String(value), 'utf8'))
+      writing = next
+      return next
+    },
+  }
 }
 
-export const getPlayTime = async () => {
-  await init()
-  return time
+let dataPath = ''
+export const initPlayTimeStore = (directory: string) => {
+  dataPath = directory
 }
-
-export const savePlayTime = async (_time: number) => {
-  await init()
-  time = _time
-  if (initState == 1) return
-  asyncFS.writeFile(time.toString())
-}
+export const { getPlayTime, savePlayTime } = createPlayTimeStore(() => dataPath)

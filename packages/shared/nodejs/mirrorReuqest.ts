@@ -123,7 +123,6 @@ export const eachMirror = async <T = unknown>(
     if (type === null || type === 'ghProxy') {
       let newUrl = getGhProxyUrl(url)
       if (newUrl) {
-        // @ts-expect-error
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if (import.meta.env.DEV) {
           console.warn(`Request failed, trying mirror: ${url} -> ${newUrl}`)
@@ -134,7 +133,6 @@ export const eachMirror = async <T = unknown>(
     }
     let newUrl = getMirrorUrl(url)
     if (newUrl) {
-      // @ts-expect-error
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (import.meta.env.DEV) {
         console.warn(`Request failed, trying mirror: ${url} -> ${newUrl}`)

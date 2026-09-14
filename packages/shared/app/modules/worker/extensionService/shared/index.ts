@@ -125,6 +125,7 @@ export const removeExtensions = async (extensions: AnyListen.Extension.Extension
 }
 
 export const loadExtension = async (extension: AnyListen.Extension.Extension) => {
+  if (extensionState.draftOnly) return
   extensionEvent.loading(extension.id)
   extension.errorMessage = ''
   extension.loaded = false

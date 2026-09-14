@@ -1,4 +1,4 @@
-import { managed, managedRole } from '@/accounts/managed'
+import { managed, managedRole, sanitizeExtension } from '@/accounts/managed'
 import {
   clearExtensionLogs,
   disableExtension,
@@ -111,7 +111,11 @@ export const createExposeExtension = () => {
 export const createServerExtension = () => {
   const actions = {
     async extensionEvent(event) {
-      if (managed && managedRole() !== 'admin' && event.action !== 'resourceUpdated') return
+      if (managed && managedRole() !== 'admin') {
+        if (event.action === 'listSet')
+          event = { ...event, data: event.data.map((extension) => sanitizeExtension(extension) as AnyListen.Extension.Extension) }
+        else if (event.action !== 'resourceUpdated') return
+      }
       if (managed && managedRole() !== 'admin' && event.action === 'resourceUpdated')
         event = { ...event, data: { ...event.data, commands: [], listProvider: [] } }
       broadcast((socket) => {

@@ -33,10 +33,11 @@ const dispatchers = [
   // interceptors.responseError(),
 ] as const
 let proxyAgent: ProxyAgent | null = null
-const managedNetwork = Boolean(process.env.ANYLISTEN_USER_ID)
+let managedNetwork = Boolean(process.env.ANYLISTEN_USER_ID)
 let globalDispatcher = managedNetwork
   ? publicNetworkAgent(JSON.parse(process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS ?? '[]'))
   : getGlobalDispatcher()
+let ownedPublicDispatcher = managedNetwork ? globalDispatcher : undefined
 const buildDispatcher = (
   redirectDispatcher: Dispatcher.DispatcherComposeInterceptor | null,
   retryNum = defaultOptions.retryNum
@@ -61,7 +62,13 @@ const buildDispatcher = (
   return (proxyAgent ?? globalDispatcher).compose(...otherInterceptors)
 }
 
-setGlobalDispatcher(buildDispatcher(redirectDispatcher))
+export const configurePublicNetwork = (allowedOrigins: string[]) => {
+  managedNetwork = true
+  proxyAgent = null
+  const previous = ownedPublicDispatcher
+  globalDispatcher = ownedPublicDispatcher = publicNetworkAgent(allowedOrigins)
+  void previous?.close().catch(() => {})
+}
 
 export const setProxy = (url?: string) => {
   if (managedNetwork && url) throw new Error('Outbound proxies are disabled in managed mode')
@@ -241,7 +248,7 @@ const buildRequestDispatcher = (options: Options) => {
       options.retryNum
     )
   }
-  return dispatcher
+  return dispatcher ?? buildDispatcher(redirectDispatcher)
 }
 
 export type NeedBodyType = Dispatcher.ResponseData['body']

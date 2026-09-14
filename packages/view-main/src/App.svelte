@@ -24,7 +24,7 @@
     {/if}
   {/if}
   {#if import.meta.env.VITE_IS_WEB}
-    {#if account.ready && account.enabled && (!account.user || account.user.mustChangePassword || !location.pathname.startsWith(`/u/${account.user.id}/`))}
+    {#if account.ready && account.enabled && (!account.user || !location.pathname.startsWith(`/u/${account.user.id}/`))}
       <AccountPage />
     {:else}
     {#if appReady.appAeady}

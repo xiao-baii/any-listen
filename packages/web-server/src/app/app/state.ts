@@ -1,6 +1,6 @@
 import defaultSetting from '@/app/shared/defaultSetting'
 
-export const appState: {
+export interface AppState {
   machineId: string
   envParams: AnyListen.EnvParams
   staticPath: string
@@ -14,7 +14,9 @@ export const appState: {
     host: string
     port: string
   }
-} = {
+}
+
+export const createAppState = (): AppState => ({
   machineId: '',
   envParams: {
     cmdParams: {},
@@ -39,6 +41,8 @@ export const appState: {
   },
   cacheDataPath: '',
   tempDataPath: '',
-  appSetting: defaultSetting,
+  appSetting: { ...defaultSetting },
   shouldUseDarkColors: false,
-}
+})
+
+export const appState = createAppState()

@@ -1,3 +1,10 @@
+import { databaseState } from '../../context'
+
+const getState = () => databaseState('play_list/index.ts', () => ({
+  playList: null as AnyListen.Player.PlayMusicInfo[] | null,
+  rawPoss: new Map<string, number>(),
+}))
+
 /* eslint-disable @typescript-eslint/naming-convention */
 import { arrPush, arrPushByPosition } from '@any-listen/common/utils'
 
@@ -13,8 +20,8 @@ import {
 } from './dbHelper'
 import type { ListMusicInfo, PlayedInfo } from './statements'
 
-let playList: AnyListen.Player.PlayMusicInfo[] | null = null
-let rawPoss = new Map<string, number>()
+
+
 
 const sourceMap: Record<number, AnyListen.Player.SourceType> = {
   0: 'local',
@@ -53,19 +60,19 @@ const rebuildPosInfo = (
     position: number
   }>
 ) => {
-  rawPoss.clear()
-  for (const info of list) rawPoss.set(info.item_id, info.position)
+  getState().rawPoss.clear()
+  for (const info of list) getState().rawPoss.set(info.item_id, info.position)
 }
 
 const initListInfo = (force = false) => {
-  if (playList && !force) return
+  if (getState().playList && !force) return
   let list = queryList().sort((a, b) => a.position - b.position)
-  playList = []
-  rawPoss.clear()
+  getState().playList = []
+  getState().rawPoss.clear()
   for (const info of list) {
     const { item_id, position, list_id, source, play_later, played, is_local, meta, ...mInfo } = info
-    rawPoss.set(item_id, position)
-    playList.push({
+    getState().rawPoss.set(item_id, position)
+    getState().playList!.push({
       musicInfo: {
         ...mInfo,
         isLocal: is_local == 1,
@@ -87,7 +94,7 @@ const initListInfo = (force = false) => {
  */
 export const getPlayList = (): AnyListen.Player.PlayMusicInfo[] => {
   initListInfo()
-  return playList!
+  return getState().playList!
 }
 
 /**
@@ -96,7 +103,7 @@ export const getPlayList = (): AnyListen.Player.PlayMusicInfo[] => {
 export const playListOverride = (newList: AnyListen.Player.PlayMusicInfo[]) => {
   let list = toDBList(newList)
   overrideList(list)
-  playList = newList
+  getState().playList = newList
   rebuildPosInfo(list)
 }
 
@@ -107,20 +114,20 @@ export const playListOverride = (newList: AnyListen.Player.PlayMusicInfo[]) => {
  */
 export const playListAdd = (position: number, list: AnyListen.Player.PlayMusicInfo[]) => {
   initListInfo()
-  if (position < 0 || position >= playList!.length) {
-    const pos = playList!.length ? (rawPoss.get(playList!.at(-1)!.itemId) ?? playList!.length) + 1 : 0
+  if (position < 0 || position >= getState().playList!.length) {
+    const pos = getState().playList!.length ? (getState().rawPoss.get(getState().playList!.at(-1)!.itemId) ?? getState().playList!.length) + 1 : 0
     const newLists: ListMusicInfo[] = toDBList(list, pos)
     inertInfo(newLists)
-    playList = arrPush(playList!, list)
-    for (const info of newLists) rawPoss.set(info.item_id, info.position)
+    getState().playList = arrPush(getState().playList!, list)
+    for (const info of newLists) getState().rawPoss.set(info.item_id, info.position)
   } else {
-    const newUserLists = toDBList([...playList!])
+    const newUserLists = toDBList([...getState().playList!])
     arrPushByPosition(newUserLists, toDBList(list, 0), position)
     newUserLists.forEach((list, index) => {
       list.position = index
     })
     overrideList(newUserLists)
-    arrPushByPosition(playList!, list, position)
+    arrPushByPosition(getState().playList!, list, position)
     rebuildPosInfo(newUserLists)
   }
 }
@@ -132,8 +139,8 @@ export const playListAdd = (position: number, list: AnyListen.Player.PlayMusicIn
 export const playListRemove = (ids: string[]) => {
   initListInfo()
   deleteInfo(ids)
-  playList = playList!.filter((l) => !ids.includes(l.itemId))
-  for (const id of ids) rawPoss.delete(id)
+  getState().playList = getState().playList!.filter((l) => !ids.includes(l.itemId))
+  for (const id of ids) getState().rawPoss.delete(id)
 }
 
 /**
@@ -145,7 +152,7 @@ export const playListUpdate = (info: AnyListen.Player.PlayMusicInfo[]) => {
   const musicMap = new Map<string, AnyListen.Player.PlayMusicInfo>()
   for (const music of info) musicMap.set(music.itemId, music)
   const updateInfos: AnyListen.Player.PlayMusicInfo[] = []
-  const infos = playList!.filter((i) => {
+  const infos = getState().playList!.filter((i) => {
     const update = musicMap.has(i.itemId)
     if (update) updateInfos.push(i)
     return update
@@ -172,7 +179,7 @@ export const playListUpdatePlayed = (played: boolean, ids: string[]) => {
   initListInfo()
   const dbPlayed = Number(played)
   updatePlayedInfo(ids.map((id) => ({ item_id: id, played: dbPlayed })))
-  for (const info of playList!) {
+  for (const info of getState().playList!) {
     if (ids.includes(info.itemId)) info.played = played
   }
 }
@@ -187,14 +194,14 @@ export const playListUpdatePlayedAll = (played: boolean) => {
   const dbPlayed = Number(played)
   let update = false
   let dbList: PlayedInfo[] = []
-  for (const info of playList!) {
+  for (const info of getState().playList!) {
     if (info.played == played) continue
     update ||= true
     dbList.push({ item_id: info.itemId, played: dbPlayed })
   }
   if (!update) return
   updatePlayedInfo(dbList)
-  for (const info of playList!) {
+  for (const info of getState().playList!) {
     info.played = played
   }
 }
@@ -206,7 +213,7 @@ export const playListUpdatePlayedAll = (played: boolean) => {
  */
 export const playListUpdatePosition = (position: number, ids: string[]) => {
   initListInfo()
-  const newList = [...playList!]
+  const newList = [...getState().playList!]
 
   const updateInfos: AnyListen.Player.PlayMusicInfo[] = []
 
@@ -221,7 +228,7 @@ export const playListUpdatePosition = (position: number, ids: string[]) => {
   arrPushByPosition(newList, updateInfos, position)
   const posList = newList.map((l, i) => ({ item_id: l.itemId, position: i }))
   updatePositionInfo(posList)
-  playList = newList
+  getState().playList = newList
   rebuildPosInfo(posList)
 }
 
@@ -229,8 +236,7 @@ export const playListUpdatePosition = (position: number, ids: string[]) => {
  * 清空播放列表
  */
 export const playListClear = () => {
-  if (!playList?.length) return
   clearList()
-  playList = []
-  rawPoss.clear()
+  getState().playList = []
+  getState().rawPoss.clear()
 }

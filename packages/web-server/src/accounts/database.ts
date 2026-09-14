@@ -11,7 +11,6 @@ export interface User {
   username: string
   role: 'admin' | 'user'
   disabled: number
-  mustChangePassword: number
   passwordHash: string
   createdAt: number
 }
@@ -32,7 +31,8 @@ export class Accounts {
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, role TEXT NOT NULL CHECK(role IN ('admin','user')), disabled INTEGER NOT NULL DEFAULT 0, mustChangePassword INTEGER NOT NULL DEFAULT 1, passwordHash TEXT NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, role TEXT NOT NULL CHECK(role IN ('admin','user')), disabled INTEGER NOT NULL DEFAULT 0, passwordHash TEXT NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE UNIQUE INDEX IF NOT EXISTS users_single_admin ON users(role) WHERE role = 'admin';
       CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, userId TEXT NOT NULL REFERENCES users(id), tokenHash TEXT NOT NULL UNIQUE, expiresAt INTEGER NOT NULL, createdAt INTEGER NOT NULL, userAgent TEXT NOT NULL, ip TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS sessions_user ON sessions(userId);
       CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, actor TEXT, action TEXT NOT NULL, target TEXT, time INTEGER NOT NULL);
@@ -60,6 +60,10 @@ export class Accounts {
     if (this.find(username)) fail(409, 'Username already exists')
     const id = randomUUID()
     this.db.transaction(() => {
+      if (role === 'admin') {
+        if (actor !== null) fail(403, 'Administrator can only be created during deployment initialization')
+        if (this.db.prepare("SELECT id FROM users WHERE role = 'admin'").get()) fail(409, 'Administrator already exists')
+      }
       this.db
         .prepare('INSERT INTO users(id,username,role,passwordHash,createdAt) VALUES(?,?,?,?,?)')
         .run(id, username, role, hash, Date.now())
@@ -100,7 +104,7 @@ export class Accounts {
   revoke(id: string, userId: string) {
     this.db.prepare('DELETE FROM sessions WHERE id = ? AND userId = ?').run(id, userId)
   }
-  async password(id: string, password: string, force: boolean, actor: string, expectedHash?: string, authorize?: () => void) {
+  async password(id: string, password: string, actor: string, expectedHash?: string, authorize?: () => void) {
     const hash = await hashPassword(password)
     authorize?.()
     if (!this.get(id)) fail(404, 'Account not found')
@@ -108,7 +112,7 @@ export class Accounts {
       const current = this.get(id)!
       if (expectedHash && (current.disabled || current.passwordHash !== expectedHash))
         fail(409, 'Account changed. Sign in again.')
-      this.db.prepare('UPDATE users SET passwordHash = ?, mustChangePassword = ? WHERE id = ?').run(hash, Number(force), id)
+      this.db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(hash, id)
       this.db.prepare('DELETE FROM sessions WHERE userId = ?').run(id)
       this.audit(actor, 'user.password', id)
     })()
@@ -117,12 +121,7 @@ export class Accounts {
     this.db.transaction(() => {
       const user = this.get(id)
       if (!user) fail(404, 'Account not found')
-      if (disabled && user!.role === 'admin') {
-        const { count } = this.db
-          .prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND disabled = 0 AND id != ?")
-          .get(id) as { count: number }
-        if (!count) fail(409, 'Cannot disable the last administrator')
-      }
+      if (disabled && user!.role === 'admin') fail(409, 'Cannot disable the administrator')
       this.db.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(Number(disabled), id)
       if (disabled) this.db.prepare('DELETE FROM sessions WHERE userId = ?').run(id)
       this.audit(actor, disabled ? 'user.disable' : 'user.enable', id)

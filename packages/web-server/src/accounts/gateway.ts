@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises'
 import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import path from 'node:path'
+import { formatExtensionGHMirrorHosts } from '@any-listen/common/tools'
 
 import { Accounts, publicUser, type User, type Session } from './database'
 import { Publications } from './publications'
@@ -57,17 +58,18 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
   const limiter = new LoginLimiter()
   const connections = new Map<string, Set<Socket | ServerResponse>>()
   const publications = new Publications(accounts, runtimes)
+  const siteSettings = () => ({ proxyAllResources: runtimes.proxyAllResources, onlineResourceEnabled: runtimes.onlineResourceEnabled, ghMirrorHosts: runtimes.ghMirrorHosts })
+  runtimes.setSiteSettings({
+    proxyAllResources: accounts.state('network.proxyAllResources') === 'true',
+    onlineResourceEnabled: accounts.state('onlineResource.enable') === 'true',
+    ghMirrorHosts: accounts.state('extension.ghMirrorHosts') ?? runtimes.ghMirrorHosts,
+  })
   runtimes.prepare = (user) => {
     if (!accounts.get(user.id) || accounts.get(user.id)!.disabled) fail(403, 'Account disabled')
     return publications.apply(user)
   }
   const originFor = (req: IncomingMessage) => configuredOrigin ?? `http://${req.headers.host}`
   const authFor = (req: IncomingMessage): Auth => accounts.session(cookieToken(req)) ?? fail(401, 'Sign in required')
-  const fullAuth = (req: IncomingMessage) => {
-    const auth = authFor(req)
-    if (auth.user.mustChangePassword) fail(403, 'Change your password first')
-    return auth
-  }
   const setCookie = (res: ServerResponse, token: string, req: IncomingMessage) =>
     res.setHeader(
       'Set-Cookie',
@@ -200,13 +202,12 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         authorize()
         if (!(await verifyPassword(body.currentPassword, auth.user.passwordHash))) fail(400, 'Current password is incorrect')
         authorize()
-        await accounts.password(auth.user.id, body.password as string, false, auth.user.id, auth.user.passwordHash, authorize)
+        await accounts.password(auth.user.id, body.password as string, auth.user.id, auth.user.passwordHash, authorize)
         revoke(auth.user.id)
         setCookie(res, '', req)
         json(res, 200, { ok: true })
         return
       }
-      if (auth.user.mustChangePassword) fail(403, 'Change your password first')
       if (url.pathname === '/account-api/sessions' && req.method === 'GET') {
         json(res, 200, { sessions: accounts.sessions(auth.user.id), currentId: auth.session.id })
         return
@@ -219,6 +220,43 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         return
       }
       if (auth.user.role !== 'admin') fail(403, 'Administrator required')
+      if (url.pathname === '/account-api/settings' && req.method === 'GET') {
+        json(res, 200, siteSettings())
+        return
+      }
+      if (url.pathname === '/account-api/maintenance' && req.method === 'GET') {
+        json(res, 200, { running: publications.status().running })
+        return
+      }
+      if (url.pathname === '/account-api/settings' && req.method === 'POST') {
+        const body = await readJson(req)
+        authorize()
+        if (typeof body.proxyAllResources !== 'boolean') fail(400, 'proxyAllResources must be boolean')
+        if (typeof body.onlineResourceEnabled !== 'boolean') fail(400, 'onlineResourceEnabled must be boolean')
+        if (typeof body.ghMirrorHosts !== 'string' || body.ghMirrorHosts.length > 8192) fail(400, 'Invalid GitHub mirror list')
+        const hosts = (body.ghMirrorHosts as string).split('\n').map((host) => host.trim()).filter(Boolean)
+        for (const host of hosts) {
+          try {
+            const url = new URL(host)
+            if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || /\s|,/.test(host))
+              fail(400, 'Invalid GitHub mirror URL')
+          } catch { fail(400, 'Invalid GitHub mirror URL') }
+        }
+        const ghMirrorHosts = formatExtensionGHMirrorHosts(hosts).join('\n')
+        const enabled = body.proxyAllResources as boolean
+        const onlineResourceEnabled = body.onlineResourceEnabled as boolean
+        accounts.db.transaction(() => {
+          accounts.setState('network.proxyAllResources', String(enabled))
+          accounts.audit(auth.user.id, 'settings.proxyAllResources', String(enabled))
+          accounts.setState('onlineResource.enable', String(onlineResourceEnabled))
+          accounts.audit(auth.user.id, 'settings.onlineResourceEnabled', String(onlineResourceEnabled))
+          accounts.setState('extension.ghMirrorHosts', ghMirrorHosts)
+          accounts.audit(auth.user.id, 'settings.ghMirrorHosts')
+        })()
+        runtimes.setSiteSettings({ proxyAllResources: enabled, onlineResourceEnabled, ghMirrorHosts })
+        json(res, 200, siteSettings())
+        return
+      }
       if (url.pathname === '/account-api/users' && req.method === 'GET') {
         json(res, 200, { users: accounts.list(), runtimes: runtimes.status() })
         return
@@ -226,11 +264,12 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
       if (url.pathname === '/account-api/users' && req.method === 'POST') {
         const body = await readJson(req)
         authorize()
-        if (body.role !== 'admin' && body.role !== 'user') fail(400, 'Invalid role')
+        if (body.role === 'admin') fail(403, 'Administrator can only be created during deployment initialization')
+        if (body.role !== undefined) fail(400, 'Account role cannot be specified')
         const user = await accounts.create(
           body.username as string,
           body.password as string,
-          body.role === 'admin' ? 'admin' : 'user',
+          'user',
           auth.user.id,
           authorize
         )
@@ -245,7 +284,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         if (userMatch[2] === 'disabled') {
           if (typeof body.disabled !== 'boolean') fail(400, 'disabled must be boolean')
           accounts.disable(id, body.disabled as boolean, auth.user.id)
-        } else await accounts.password(id, body.password as string, true, auth.user.id, undefined, authorize)
+        } else await accounts.password(id, body.password as string, auth.user.id, undefined, authorize)
         revoke(id)
         if (accounts.get(id)?.disabled) await runtimes.stop(id)
         json(res, 200, { ok: true })
@@ -255,11 +294,30 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         json(res, 200, publications.status())
         return
       }
+      if (['/account-api/source-script', '/account-api/source-package'].includes(url.pathname) && req.method === 'POST') {
+        if (publications.status().running) fail(409, 'Publication in progress')
+        const isPackage = url.pathname === '/account-api/source-package'
+        const content = await readBody(req, (isPackage ? 16 : 1) * 1024 * 1024)
+        authorize()
+        const runtime = await runtimes.get(auth.user)
+        authorize()
+        if (publications.status().running) fail(409, 'Publication in progress')
+        const result = await (isPackage ? runtime.context!.importPackage!(content) : runtime.context!.importScript!('source.js', content.toString('utf8')))
+          .catch((error: Error) => fail(400, error.message))
+        json(res, 201, result)
+        return
+      }
+      if (url.pathname === '/account-api/publication/retry' && req.method === 'POST') {
+        await publications.retrySources()
+        json(res, 200, publications.status())
+        return
+      }
       const retryMatch = /^\/account-api\/users\/([^/]+)\/retry$/.exec(url.pathname)
       if (retryMatch && req.method === 'POST') {
         const user = accounts.get(retryMatch[1])
         if (!user || user.disabled) fail(404, 'Active account not found')
         runtimes.retry(user!.id)
+        if (runtimes.sources.status().error) await publications.retrySources()
         await runtimes.get(user!)
         json(res, 200, { ok: true })
         return
@@ -276,7 +334,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
       await serveStatic(req, res, decodeURIComponent(url.pathname).slice(1))
       return
     }
-    const auth = fullAuth(req)
+    const auth = authFor(req)
     if (!['GET', 'HEAD'].includes(req.method!) && req.headers.origin !== originFor(req)) fail(403, 'Invalid request origin')
     const target = userTarget(url, auth)
     const relative = target.split('?')[0].slice(1)
@@ -290,7 +348,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     }
     const runtime = await runtimes.get(auth.user)
     if (req.destroyed || res.destroyed) return
-    if (fullAuth(req).session.id !== auth.session.id) fail(401, 'Session expired')
+    if (authFor(req).session.id !== auth.session.id) fail(401, 'Session expired')
     remember(auth)
     track(auth, res, runtime)
     const upstream = http.request(
@@ -338,12 +396,12 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     socket.on('error', () => socket.destroy())
     void (async () => {
       if (req.headers.origin !== originFor(req)) fail(403, 'Invalid origin')
-      const auth = fullAuth(req),
+      const auth = authFor(req),
         url = new URL(req.url!, 'http://gateway')
       const target = userTarget(url, auth),
         runtime = await runtimes.get(auth.user)
       if (socket.destroyed) return
-      if (fullAuth(req).session.id !== auth.session.id) fail(401, 'Session expired')
+      if (authFor(req).session.id !== auth.session.id) fail(401, 'Session expired')
       remember(auth)
       track(auth, socket, runtime)
       const upstream = http.request({
@@ -396,6 +454,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     async close() {
       if (closing) return
       closing = true
+      await publications.close()
       clearInterval(interval)
       server.close()
       for (const set of connections.values()) for (const connection of set) connection.destroy()

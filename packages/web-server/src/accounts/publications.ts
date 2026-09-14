@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import type { Accounts, User } from './database'
@@ -40,6 +40,11 @@ export const snapshotExtensions = async (source: string, target: string) => {
     const packagePath = path.join(source, 'ext', matches[0])
     const manifest = await readJSON(path.join(packagePath, 'manifest.json'))
     if (manifest.id !== id) fail(400, 'Extension manifest does not match its directory')
+    if (
+      manifest.grant?.some((grant: string) => ['player', 'music_list'].includes(grant)) ||
+      manifest.contributes?.listProviders?.length
+    )
+      fail(400, `Public source requires personal capabilities: ${id}`)
     await safeCopy(packagePath, path.join(target, 'ext', id))
     const configPath = path.join(source, 'datas', id, 'configuration.json')
     const config = await readJSON(configPath).catch((error: NodeJS.ErrnoException) => {
@@ -71,71 +76,105 @@ export const snapshotExtensions = async (source: string, target: string) => {
 }
 export class Publications {
   private running = false
-  private candidate: string | undefined
+  private loading: Promise<void> | undefined
+  private initialized = false
   private message = ''
+  private recoveryTimer: ReturnType<typeof setTimeout> | undefined
+  private recoveryAttempts = 0
+  private recovery: Promise<void> | undefined
+  private closed = false
   constructor(
     private accounts: Accounts,
     private runtimes: Runtimes
-  ) {}
+  ) {
+    runtimes.sources.onFailure = () => this.scheduleRecovery()
+  }
+  private scheduleRecovery() {
+    if (this.closed || this.running || this.recoveryTimer || !this.accounts.state('publication')) return
+    if (this.recoveryAttempts >= 3) {
+      this.message = 'Public source recovery failed; administrator retry required'
+      return
+    }
+    const wait = 1000 * 2 ** this.recoveryAttempts++
+    this.message = 'Public source restarting'
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = undefined
+      this.recovery = this.retrySources(true).catch(() => this.scheduleRecovery())
+    }, wait).unref()
+  }
+  async close() {
+    this.closed = true
+    clearTimeout(this.recoveryTimer)
+    this.runtimes.sources.onFailure = () => {}
+    await this.recovery
+  }
   status() {
     return { version: this.accounts.state('publication') ?? null, running: this.running, message: this.message }
   }
   async apply(user: User) {
-    // The administrator's directory is the editable draft; ordinary accounts receive immutable releases.
-    if (user.role === 'admin') return
-    const version = this.candidate ?? this.accounts.state('publication')
-    const root = path.join(this.runtimes.root, 'users', user.id, 'app', 'extension')
-    const current = await readFile(path.join(root, 'managed-version'), 'utf8').catch(() => '')
-    if (!version) {
-      // Recover an interrupted first publication without exposing the uncommitted release.
-      for (const id of extensionIds) {
-        await rm(path.join(root, 'ext', id), { recursive: true, force: true })
-        await rm(path.join(root, 'datas', id, 'configuration.json'), { force: true })
-        await rm(path.join(root, 'datas', id, 'storage', 'scripts'), { recursive: true, force: true })
-      }
-      await mkdir(root, { recursive: true })
-      await writeFile(path.join(root, 'extensions.json'), '[]')
-      await rm(path.join(root, 'managed-version'), { force: true })
-      return
+    // Every player's resources come from the published version, including the administrator.
+    if (this.initialized) return
+    this.loading ??= this.loadPublished()
+      .catch(() => {
+        // Failed sources are reported by the host; personal music data remains usable.
+        this.initialized = true
+      })
+      .finally(() => {
+        this.loading = undefined
+      })
+    await this.loading
+  }
+  async retrySources(automatic = false) {
+    if (this.running) fail(409, 'A publication is already running')
+    this.running = true
+    clearTimeout(this.recoveryTimer)
+    this.recoveryTimer = undefined
+    if (!automatic) this.recoveryAttempts = 0
+    try {
+      await this.runtimes.pauseStarts()
+      await this.loading
+      const active = [...this.runtimes.entries.values()]
+        .map((runtime) => runtime.user)
+      await this.runtimes.sources.stop()
+      for (const user of active) await this.runtimes.stop(user.id)
+      await this.loadPublished()
+      for (const user of active) await this.runtimes.get(user, true)
+      this.message = 'Public sources restored'
+    } finally {
+      this.running = false
+      this.runtimes.resumeStarts()
     }
-    if (current === version) return
-    const source = path.join(this.runtimes.root, 'publications', version)
-    await mkdir(root, { recursive: true })
-    await rm(path.join(root, 'managed-version'), { force: true })
-    for (const id of extensionIds) {
-      for (const dir of ['ext', 'datas']) {
-        const target = path.join(root, dir, id)
-        // Only the managed extensions are replaced; unrelated account data is never copied or removed.
-        if (dir === 'ext') await rm(target, { recursive: true, force: true })
-        await mkdir(path.dirname(target), { recursive: true })
-        if (dir === 'datas') await rm(path.join(target, 'storage', 'scripts'), { recursive: true, force: true })
-        await safeCopy(path.join(source, dir, id), target)
-      }
-    }
-    await cp(path.join(source, 'extensions.json'), path.join(root, 'extensions.json'))
-    await writeFile(path.join(root, 'managed-version'), version)
+  }
+  private async loadPublished() {
+    const version = this.accounts.state('publication')
+    await this.runtimes.sources.switch(
+      version,
+      path.join(this.runtimes.root, 'publications', version ?? 'unpublished'),
+      this.runtimes.allowedMediaOrigins,
+      this.runtimes.ghMirrorHosts
+    )
+    this.initialized = true
   }
   async publish(admin: User) {
     if (this.running) fail(409, 'A publication is already running')
     this.running = true
+    clearTimeout(this.recoveryTimer)
+    this.recoveryTimer = undefined
+    this.recoveryAttempts = 0
     this.message = 'Validating extension snapshot'
     const previous = this.accounts.state('publication')
     const version = randomUUID()
     const target = path.join(this.runtimes.root, 'publications', version)
     let active: User[] = []
-    const validatorId = randomUUID()
-    const validator = { ...admin, id: validatorId, role: 'user' as const }
-    const check = new Runtimes(this.runtimes.root, this.runtimes.entry)
-    check.allowedMediaOrigins = this.runtimes.allowedMediaOrigins
     try {
       await this.runtimes.pauseStarts()
-      active = [...this.runtimes.entries.values()].map((r) => r.user).filter((u) => u.role !== 'admin')
+      active = [...this.runtimes.entries.values()].map((r) => r.user)
       await this.runtimes.stop(admin.id)
       await snapshotExtensions(path.join(this.runtimes.root, 'users', admin.id, 'app', 'extension'), target)
-      this.candidate = version
-      check.prepare = (user) => this.apply(user)
-      await check.get(validator)
-      await check.close()
+      await this.runtimes.sources.stop()
+      for (const user of active) await this.runtimes.stop(user.id)
+      await this.runtimes.sources.switch(version, target, this.runtimes.allowedMediaOrigins, this.runtimes.ghMirrorHosts)
+      this.initialized = true
       for (const user of active) {
         this.message = `Applying to ${user.username}`
         try {
@@ -151,23 +190,34 @@ export class Publications {
       })()
       this.message = 'Published'
     } catch (error) {
-      this.candidate = previous
       // Include accounts that started while the rollout was in progress.
       const affected = new Map(
         [...active, ...[...this.runtimes.entries.values()].map((r) => r.user)]
-          .filter((u) => u.role !== 'admin')
           .map((u) => [u.id, u])
       )
       const rollbackErrors: string[] = []
+      await this.runtimes.sources.stop()
       for (const user of affected.values()) {
         try {
           await this.runtimes.stop(user.id)
-          if (!previous) {
-            const root = path.join(this.runtimes.root, 'users', user.id, 'app', 'extension')
-            for (const id of extensionIds) await rm(path.join(root, 'ext', id), { recursive: true, force: true })
-            await writeFile(path.join(root, 'extensions.json'), '[]')
-            await rm(path.join(root, 'managed-version'), { force: true })
-          }
+        } catch {
+          rollbackErrors.push(user.username)
+        }
+      }
+      try {
+        await this.runtimes.sources.switch(
+          previous,
+          path.join(this.runtimes.root, 'publications', previous ?? 'unpublished'),
+          this.runtimes.allowedMediaOrigins,
+          this.runtimes.ghMirrorHosts
+        )
+        this.initialized = true
+      } catch {
+        rollbackErrors.push('public sources')
+      }
+      for (const user of affected.values()) {
+        try {
+          await this.runtimes.stop(user.id)
           await this.runtimes.get(user, true)
         } catch {
           rollbackErrors.push(user.username)
@@ -177,14 +227,8 @@ export class Publications {
       this.accounts.audit(admin.id, 'extension.publish.failed', version)
       fail(400, this.message)
     } finally {
-      try {
-        await check.close()
-        await rm(path.join(this.runtimes.root, 'users', validatorId), { recursive: true, force: true })
-      } finally {
-        this.candidate = undefined
-        this.running = false
-        this.runtimes.resumeStarts()
-      }
+      this.running = false
+      this.runtimes.resumeStarts()
     }
   }
 }

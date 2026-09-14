@@ -4,7 +4,7 @@ import { checkFile } from '@any-listen/nodejs/index'
 
 import { log } from '@/app/shared/log'
 
-import { version } from '../../../package.json' with { type: 'json' }
+import packageInfo from '../../../package.json' with { type: 'json' }
 import { bannerMini } from './constants'
 export * from '@any-listen/common/utils'
 export * from '@any-listen/nodejs/index'
@@ -26,7 +26,7 @@ export const parseDataFile = async <T>(filePath: string): Promise<T | null> => {
 
 export const printLogo = () => {
   const len = Math.max(...bannerMini.split('\n').map((e) => e.length))
-  const vStr = `v${version}`
+  const vStr = `v${packageInfo.version}`
   const sstr = ' '.repeat(Math.max(0, Math.trunc((len - vStr.length) / 2)))
   console.log(`${bannerMini}\n\n${sstr}${vStr}${sstr}`)
 }

@@ -5,7 +5,8 @@ import getStore from '@/app/shared/store'
 import type { ExposeClientFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposeSoundEffect = () => {
+export const createExposeSoundEffect = (store = getStore) => {
+  const getStore = store
   return {
     async getUserSoundEffectEQPresetList(event) {
       return getStore(STORE_NAMES.SOUND_EFFECT).get<AnyListen.SoundEffect.EQPreset[]>('eqPreset') ?? []

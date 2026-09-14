@@ -15,12 +15,15 @@ import {
   topSongsDetail,
   findMusic,
   musicComment,
-} from '@any-listen/app/modules/resources'
+} from '@/app/modules/resources'
 
 import type { ExposeClientFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposeResource = () => {
+export const createExposeResource = (service = { tipSearch, hotSearch, musicSearch, musicPicSearch, lyricSearch, getLyric,
+  songlistSearch, songlistSorts, songlistTags, songlist, songlistDetail, topSongs, topSongsDate, topSongsDetail, findMusic, musicComment }) => {
+  const { tipSearch, hotSearch, musicSearch, musicPicSearch, lyricSearch, getLyric, songlistSearch,
+    songlistSorts, songlistTags, songlist, songlistDetail, topSongs, topSongsDate, topSongsDetail, findMusic, musicComment } = service
   return {
     async tipSearch(event, info) {
       return tipSearch(info)

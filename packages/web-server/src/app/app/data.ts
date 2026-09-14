@@ -1,5 +1,6 @@
 import { STORE_NAMES } from '@any-listen/common/constants'
 
+import { managed } from '@/accounts/managed'
 import defaultSetting from '@/app/shared/defaultSetting'
 import getStore from '@/app/shared/store'
 
@@ -74,6 +75,13 @@ export const saveSetting = (setting?: Partial<AnyListen.AppSetting>, isInit = fa
     originSetting = { ...defaultSetting }
   } else originSetting = appState.appSetting
 
+  if (managed) setting = {
+    ...setting,
+    'sync.webdav.enable': false,
+    'network.proxyAllResources': process.env.ANYLISTEN_PROXY_ALL_RESOURCES === 'true',
+    'onlineResource.enable': process.env.ANYLISTEN_ONLINE_RESOURCE_ENABLED === 'true',
+    'extension.ghMirrorHosts': global.anylisten.config['extension.ghMirrorHosts'].join('\n'),
+  }
   const result = mergeSetting(originSetting, setting)
 
   result.setting.version = defaultSetting.version

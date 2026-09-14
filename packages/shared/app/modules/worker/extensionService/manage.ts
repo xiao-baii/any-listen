@@ -49,7 +49,7 @@ export const loadLocalExtensions = async () => {
     }),
   ])
   const settingMap = new Map(settings.map((ext) => [ext.id, ext]))
-  extensionState.extensions = [...(await getExtensionListByInternal())]
+  extensionState.extensions = extensionState.onlineOnly ? [] : [...(await getExtensionListByInternal())]
   const tempList: AnyListen.Extension.Extension[] = []
   const removedExtension: AnyListen.Extension.Extension[] = []
   for (const ext of extensions) {
@@ -76,8 +76,8 @@ export const loadLocalExtensions = async () => {
   if (tempList.length) arrUnshift(extensionState.extensions, tempList)
   extensionEvent.listSet(extensionState.extensions)
 
-  void saveExtensionsSetting(extensionState.extensions)
-  void removeExtensions(removedExtension)
+  await saveExtensionsSetting(extensionState.extensions)
+  await removeExtensions(removedExtension)
   extensionEvent.loadListEnd()
 }
 
@@ -100,7 +100,7 @@ export const enableExtension = async (id: string) => {
   const targetExtension = extensionState.extensions.find((ext) => ext.id == id)
   if (!targetExtension) throw new Error(`extension not found: ${id}`)
   targetExtension.enabled = true
-  void saveExtensionsSetting(extensionState.extensions)
+  await saveExtensionsSetting(extensionState.extensions)
   extensionEvent.enabled(id, true)
   if (targetExtension.loaded) return
   await startExtension(targetExtension.id)
@@ -113,7 +113,7 @@ export const disableExtension = async (id: string) => {
   targetExtension.enabled = false
   targetExtension.loadTimestamp = 0
   if (targetExtension.errorMessage) delete targetExtension.errorMessage
-  void saveExtensionsSetting(extensionState.extensions)
+  await saveExtensionsSetting(extensionState.extensions)
   extensionEvent.enabled(id, false)
   if (!targetExtension.loaded) return
   await stopRunExtension(targetExtension)

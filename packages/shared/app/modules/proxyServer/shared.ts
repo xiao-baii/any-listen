@@ -12,11 +12,11 @@ export const checkAllowedExt = (ext: string) => {
   return ALLOWED_EXT.includes(ext.toLowerCase())
 }
 
-const RANGE_REGEX = /bytes=(?:\d*)-(?:\d*)/
+const RANGE_REGEX = /^bytes=(\d*)-(\d*)$/
 export const parseRange = (range?: string) => {
   if (!range) return null
   const matches = RANGE_REGEX.exec(range)
-  if (!matches) return null
+  if (!matches || (!matches[1] && !matches[2])) return null
   let start: number | undefined
   if (matches[1]) {
     start = parseInt(matches[1], 10)
@@ -31,8 +31,8 @@ export const parseRange = (range?: string) => {
   return { start, end }
 }
 
-export const getCacheSize = async () => {
-  const dir = proxyServerState.cacheDir
+export const getCacheSize = async (state = proxyServerState) => {
+  const dir = state.cacheDir
   let totalSize = 0
   const files = await fs.readdir(dir)
   for (const file of files) {
@@ -46,8 +46,8 @@ export const getCacheSize = async () => {
   return totalSize
 }
 
-export const clearCache = async () => {
-  const dir = proxyServerState.cacheDir
+export const clearCache = async (state = proxyServerState) => {
+  const dir = state.cacheDir
   const files = await fs.readdir(dir)
   for (const file of files) {
     if (file.endsWith(TEMP_FILE_EXT)) continue

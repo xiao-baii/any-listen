@@ -1,13 +1,19 @@
+import { databaseState } from '../../context'
+
+const getState = () => databaseState('metadata/playListInfo.ts', () => ({
+  playListInfo: undefined as unknown as PlayListInfo,
+}))
+
 import { dbPrepare } from '../../db'
 
 interface PlayListInfo {
   listId: null | string
   source: AnyListen.Player.SourceType
 }
-let playListInfo: PlayListInfo
+
 const initPlayListInfo = () => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (playListInfo !== undefined) return
+  if (getState().playListInfo !== undefined) return
   const result = dbPrepare<[], { field_value: string }>(`
     SELECT "field_value"
     FROM "main"."metadata"
@@ -23,11 +29,11 @@ const initPlayListInfo = () => {
         result.source = (result as unknown as { isOnline: boolean }).isOnline ? 'songlist' : 'local'
         delete (result as unknown as { isOnline?: boolean }).isOnline
       }
-      playListInfo = result
+      getState().playListInfo = result
       return
     } catch {}
   }
-  playListInfo = {
+  getState().playListInfo = {
     listId: null,
     source: 'local',
   }
@@ -37,7 +43,7 @@ const initPlayListInfo = () => {
  */
 export const queryMetadataPlayListInfo = () => {
   initPlayListInfo()
-  return playListInfo
+  return getState().playListInfo
 }
 /**
  * 保存播放列表id
@@ -45,13 +51,13 @@ export const queryMetadataPlayListInfo = () => {
  */
 export const saveMetadataPlayListInfo = (id: string | null, source: AnyListen.Player.SourceType) => {
   initPlayListInfo()
-  if (playListInfo.listId == id && playListInfo.source === source) return
-  playListInfo.listId = id
-  playListInfo.source = source
+  if (getState().playListInfo.listId == id && getState().playListInfo.source === source) return
+  getState().playListInfo.listId = id
+  getState().playListInfo.source = source
   dbPrepare<string>(
     `
     INSERT INTO "main"."metadata" ("field_name", "field_value")
     VALUES ('play_list_id', ?)
   `
-  ).run(JSON.stringify(playListInfo))
+  ).run(JSON.stringify(getState().playListInfo))
 }

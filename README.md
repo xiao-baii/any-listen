@@ -8,6 +8,8 @@
 
 This project is under active development and currently provides both a **Desktop version** and a **Web service version**.
 
+The `multi-user` branch adds an online-only, single-process Web service with isolated accounts and shared source workers. See the [deployment guide](./docs/multi-user.md), [development guide](./docs/single-process-development.md), and [memory measurements](./docs/single-process-memory-results.md) (Chinese). Local libraries and WebDAV remain available in the original desktop and single-user modes.
+
 ## Features
 
 - Add and play local songs (standard playlists and local lists)

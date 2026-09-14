@@ -1,6 +1,7 @@
 <script lang="ts">
   import Radio from '@/components/base/Radio.svelte'
   import { t } from '@/plugins/i18n'
+  import { account } from '@/accounts/state.svelte'
   let {
     value = $bindable(),
     disabled,
@@ -13,7 +14,7 @@
 </script>
 
 <div class="container">
-  {#each listType as type (type)}
+  {#each listType.filter((type) => !account.enabled || (type !== 'local' && type !== 'remote')) as type (type)}
     <Radio
       id={`new_list_type_${type}`}
       value={type}

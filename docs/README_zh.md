@@ -8,6 +8,8 @@
 
 项目仍在积极开发中，目前提供 **桌面版** 与 **网页版服务**。
 
+`multi-user` 分支提供单进程多账号在线音乐服务，账号数据独立，公共音源共享。请参阅[多账号部署](multi-user.md)、[代码与开发指南](single-process-development.md)和[内存实测](single-process-memory-results.md)。下列本地库和 WebDAV 功能仅适用于原桌面及单用户模式。
+
 ## 特性
 
 - 添加并播放本地歌曲（普通列表、本地列表）

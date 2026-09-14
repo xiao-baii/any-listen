@@ -23,6 +23,7 @@ let currentBackupTask: Promise<boolean> | null = null
 let isInited = false
 
 const backup = async (db: Database.Database, trigger: BackupTrigger): Promise<boolean> => {
+  if (process.env.ANYLISTEN_USER_ID) return false
   if (currentBackupTask) return false
 
   const backupType = resolveBackupType(trigger)
@@ -117,6 +118,7 @@ const setupEventBackupTrigger = (db: Database.Database) => {
 }
 
 export const initBackupTask = async (db: Database.Database) => {
+  if (process.env.ANYLISTEN_USER_ID) return
   if (isInited) return
   isInited = true
 

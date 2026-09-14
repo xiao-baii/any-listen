@@ -5,7 +5,9 @@ import { workers } from '@/app/worker'
 import type { ExposeClientFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposeMusic = () => {
+export const createExposeMusic = (service = { getLyricInfo, getMusicPic, getMusicUrl }, workerServices: Pick<typeof workers, 'dbService' | 'utilService'> = workers, state = appState) => {
+  const { getLyricInfo, getMusicPic, getMusicUrl } = service
+  const workers = workerServices, appState = state
   return {
     async getMusicUrl(event, info) {
       return getMusicUrl(info)

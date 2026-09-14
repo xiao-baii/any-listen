@@ -12,7 +12,7 @@ export const initializeAdmin = async (accounts: Accounts, env: NodeJS.ProcessEnv
     if (env.ADMIN_PASSWORD && passwordFile) throw new Error('Set only one of ADMIN_PASSWORD and ADMIN_PASSWORD_FILE')
     const password = passwordFile ? (await readFile(passwordFile, 'utf8')).trimEnd() : env.ADMIN_PASSWORD!
     const user = await accounts.create(username, password, 'admin', null)
-    console.log(`Administrator created: ${user.username} (${user.id}). Password change required on first login.`)
+    console.log(`Administrator created: ${user.username} (${user.id}).`)
   } finally {
     delete env.ADMIN_PASSWORD
     delete env.ADMIN_PASSWORD_FILE

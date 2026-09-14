@@ -13,6 +13,7 @@ import WebSocket from 'ws'
 import { Accounts } from '../src/accounts/database'
 import { createGateway } from '../src/accounts/gateway'
 import { Runtimes } from '../src/accounts/runtime'
+import { createDraftExtensions } from '../src/accounts/draftExtensions'
 
 test(
   'official extension packages publish, initialize LX script, resolve and stream private media',
@@ -30,6 +31,7 @@ test(
       res.end('0123456789')
     })
     let socket: WebSocket | undefined
+    let otherSocket: WebSocket | undefined
     try {
       media.listen(0, '127.0.0.1')
       gateway.server.listen(0, '127.0.0.1')
@@ -40,8 +42,16 @@ test(
       const password = 'Official-fixture-12345'
       const admin = await accounts.create('admin', password, 'admin', null)
       const user = await accounts.create('alice', password, 'user', admin.id)
-      await accounts.password(user.id, password, false, user.id)
+      const other = await accounts.create('bobby', password, 'user', admin.id)
       const draft = path.join(dir, 'users', admin.id, 'app/extension')
+      const installer = createDraftExtensions({ entry: path.join(root, 'build/server/extension-service.worker.js'),
+        directory: path.join(dir, 'install-check'), origins: [], mirrors: () => '', icon: () => '' })
+      try {
+        const installed = await installer.importPackage(await readFile(path.join(packages, '../metadata.alix')))
+        assert.equal(installed.id, 'online-metadata')
+        assert.equal(installed.loaded, false)
+        await assert.rejects(installer.call('installExtension', [{ directory: installed.directory }]), /expired/)
+      } finally { await installer.close() }
       for (const [id, folder] of [
         ['online-metadata', 'metadata'],
         ['lx-api-source-loader', 'loader'],
@@ -70,7 +80,27 @@ test(
         path.join(draft, 'extensions.json'),
         JSON.stringify(['online-metadata', 'lx-api-source-loader'].map((id) => ({ id, enabled: true })))
       )
+      const editor = createDraftExtensions({ entry: path.join(root, 'build/server/extension-service.worker.js'),
+        directory: draft, origins: [], mirrors: () => '', icon: () => '' })
+      try {
+        const list = await editor.call('getLocalExtensionList', []) as any[]
+        assert.equal(list.length, 2)
+        assert(list.every(extension => !extension.loaded), 'Draft inspection does not evaluate extensions')
+        await editor.call('enableExtension', ['lx-api-source-loader'])
+        assert((await editor.call('getLocalExtensionList', []) as any[]).every(extension => !extension.loaded))
+        await assert.rejects(editor.call('executeCommand', ['lx-api-source-loader.addRemoteSource']), /publication/)
+        const imported = await editor.importScript('second.js', script.replace('Controlled source', 'Second source'))
+        assert.equal(imported.name, 'Second source')
+        await assert.rejects(editor.importScript('second.js', script.replace('Controlled source', 'Second source')), /already imported/)
+        await editor.call('updateExtensionSettings', ['lx-api-source-loader', { enabledScripts: [imported.id] }])
+        assert.equal(editor.status().workers, 1)
+      } finally { await editor.close() }
+      assert.equal(editor.status().workers, 0)
+      const adminRuntime = await runtimes.get(admin)
+      assert.equal(adminRuntime.child, undefined)
+      assert.equal(runtimes.status().active[0].process, process.pid)
       await gateway.publications.publish(admin)
+      assert.equal(runtimes.status().draftWorkers, 0)
       const login = await accounts.login(user.username, password, '127.0.0.1', 'official-test')
       const cookie = `anylisten_session=${login.token}`
       socket = new WebSocket(origin.replace('http:', 'ws:') + `/u/${user.id}/api/ipc?t=main`, {
@@ -87,7 +117,13 @@ test(
       await once(socket, 'open')
       const resources = await rpc.remote.getResourceList()
       assert(resources.resources.musicSearch.some((item: any) => item.extensionId === 'online-metadata'))
-      const result = await rpc.remote.getMusicUrl({
+      const sharedResult = await runtimes.sources.call('resourceAction', ['musicUrl', {
+        extensionId: 'lx-api-source-loader', source: 'kw', quality: '128k',
+        musicInfo: { id: 'controlled', name: 'Controlled', singer: 'Test', interval: '00:10', isLocal: false,
+          meta: { musicId: 'controlled', source: 'kw', albumName: 'Test', qualitys: { '128k': { sizeStr: null } } } },
+      }])
+      assert(sharedResult.value)
+      const request = {
         musicInfo: {
           id: 'controlled',
           name: 'Controlled',
@@ -98,7 +134,22 @@ test(
         },
         quality: '128k',
         isRefresh: true,
+      }
+      const otherLogin = await accounts.login(other.username, password, '127.0.0.1', 'official-test')
+      const otherCookie = `anylisten_session=${otherLogin.token}`
+      otherSocket = new WebSocket(origin.replace('http:', 'ws:') + `/u/${other.id}/api/ipc?t=main`, {
+        headers: { Cookie: otherCookie, Origin: origin },
       })
+      const otherRpc = createMessage2Call<any>({ exposeObj: {}, timeout: 10000,
+        sendMessage: (value) => otherSocket!.send(JSON.stringify(value)),
+      })
+      otherSocket.on('message', (value) => {
+        if (value.toString() !== 'ping') otherRpc.message(JSON.parse(value.toString()))
+      })
+      await once(otherSocket, 'open')
+      const [result, otherResult] = await Promise.all([rpc.remote.getMusicUrl(request), otherRpc.remote.getMusicUrl(request)])
+      assert.equal(runtimes.sources.status().workers, 1)
+      assert.notEqual(result.url, otherResult.url, 'Shared source results receive account-owned proxy URLs')
       assert.match(result.url, /^al-ps-host:\/api\/p_static\//)
       const mediaPath = result.url.slice(result.url.indexOf('/api/'))
       const response = await fetch(`${origin}/u/${user.id}${mediaPath}`, { headers: { Cookie: cookie } })
@@ -106,10 +157,26 @@ test(
       assert.equal(await response.text(), '0123456789')
       assert.match(response.headers.get('cache-control')!, /no-store/)
       assert.equal((await fetch(`${origin}/u/${user.id}${mediaPath}`)).status, 401)
+      assert.equal((await fetch(`${origin}/u/${other.id}${mediaPath}`, { headers: { Cookie: otherCookie } })).status, 404)
+      accounts.revoke(login.session.id, user.id)
+      assert.equal((await fetch(`${origin}/u/${user.id}${mediaPath}`, { headers: { Cookie: cookie } })).status, 401)
+      const otherPath = otherResult.url.slice(otherResult.url.indexOf('/api/'))
+      assert.equal(await (await fetch(`${origin}/u/${other.id}${otherPath}`, { headers: { Cookie: otherCookie } })).text(), '0123456789')
       await gateway.publications.publish(admin)
       assert(gateway.publications.status().version)
+      const published = gateway.publications.status().version
+      const oldHost = (runtimes.sources as any).host
+      await oldHost.worker.terminate()
+      for (let attempt = 0; attempt < 160; attempt++) {
+        if (runtimes.sources.status().version === published && !runtimes.sources.status().error && !gateway.publications.status().running) break
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+      assert.equal(runtimes.sources.status().version, published, 'Worker crash recovers committed sources')
+      assert.equal(runtimes.sources.status().error, null)
+      assert.equal(new Set(runtimes.status().active.map(runtime => runtime.process)).size, 1)
     } finally {
       socket?.terminate()
+      otherSocket?.terminate()
       media.close()
       await gateway.close()
       await rm(dir, { recursive: true, force: true })

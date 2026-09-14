@@ -1,5 +1,5 @@
 import { LIST_IDS } from '@any-listen/common/constants'
-import { arrPush, throttle, getRandom } from '@any-listen/common/utils'
+import { arrPush, getRandom } from '@any-listen/common/utils'
 
 import { getSettings } from '../../common'
 import { getDeviceId } from '../../common/deviceId'
@@ -13,7 +13,9 @@ import {
 } from '../../modules/extension'
 import { workers } from '../worker'
 import { proxyCallback, type DBSeriveTypes } from '../worker/utils'
-import { initMusicListEvent, musicListEvent } from './event'
+import { initMusicListEvent, musicListEvent, Event } from './event'
+import { createMusicList } from './service'
+export { createMusicList } from './service'
 import {
   handleAddMusics,
   initLocalListProvider,
@@ -22,181 +24,35 @@ import {
   syncLocalList,
 } from './localListProvider'
 
-let dbService: DBSeriveTypes
-let scrollInfo: Map<string, number>
-let getScrollInfo: () => Promise<AnyListen.List.ListPositionInfo>
-let saveScrollInfo: (scrollInfo: AnyListen.List.ListPositionInfo) => Promise<void>
-let validateAction: ((action: AnyListen.IPCList.ActionList) => void) | undefined
-
+let musicList: ReturnType<typeof createMusicList>
 export const initMusicList = async (
-  _dbService: DBSeriveTypes,
-  _getScrollInfo: typeof getScrollInfo,
-  _saveScrollInfo: typeof saveScrollInfo,
-  _validateAction?: typeof validateAction
+  dbService: DBSeriveTypes,
+  getScrollInfo: () => Promise<AnyListen.List.ListPositionInfo>,
+  saveScrollInfo: (info: AnyListen.List.ListPositionInfo) => Promise<void>,
+  validateAction?: (action: AnyListen.IPCList.ActionList) => void,
+  options: { onlineOnly?: boolean } = {}
 ) => {
-  dbService = _dbService
-  initMusicListEvent(_dbService)
-  getScrollInfo = _getScrollInfo
-  saveScrollInfo = _saveScrollInfo
-  validateAction = _validateAction
-  await initLocalListProvider()
+  initMusicListEvent(dbService)
+  musicList = createMusicList(dbService, getScrollInfo, saveScrollInfo, validateAction, musicListEvent as unknown as Event)
+  if (!options.onlineOnly) await initLocalListProvider()
 }
-
-export const getAllUserLists = async () => {
-  return dbService.getAllUserLists()
-}
-
-export const getListMusics = async (listId: string) => {
-  return dbService.getListMusics(listId)
-}
-
-const cacheListCovers = new Map<string, string | null | undefined>()
-export const getListsCover = async (
-  ids: string[],
-  getMusicPic: (params: {
-    musicInfo: AnyListen.Music.MusicInfo
-    listId: string
-    isRefresh?: boolean
-  }) => Promise<{ url: string | null | undefined }>
-): Promise<Record<string, string | undefined | null>> => {
-  const emptyCoverListIds: string[] = []
-  const covers: Record<string, string | undefined | null> = {}
-  for (const id of ids) {
-    if (cacheListCovers.has(id)) {
-      covers[id] = cacheListCovers.get(id)
-      continue
-    }
-    emptyCoverListIds.push(id)
-  }
-  if (emptyCoverListIds.length) {
-    const listMusics = await workers.dbService.getListsFirstMusics(emptyCoverListIds)
-    const coverPromises = listMusics.map<Promise<[string, string | null | undefined]>>(async (musics, index) => {
-      const listId = emptyCoverListIds[index]
-      if (!musics.length) return [listId, null] as const
-      return getMusicPic({ musicInfo: musics[0], listId })
-        .then((picInfo) => {
-          return [listId, picInfo.url] satisfies [string, string | null | undefined]
-        })
-        .catch(() => {
-          return [listId, null] satisfies [string, string | null | undefined]
-        })
-    })
-    const coversResult = await Promise.all(coverPromises)
-    for (const [listId, pic] of coversResult) {
-      covers[listId] = pic
-      cacheListCovers.set(listId, pic)
-    }
-  }
-
-  return covers
-}
-export const clearListCoverCache = (id?: string) => {
-  if (id) {
-    cacheListCovers.delete(id)
-  } else {
-    cacheListCovers.clear()
-  }
-}
-
-export const getMusicExistListIds = async (musicId: string) => {
-  return dbService.getMusicExistListIds(musicId)
-}
-
-export const checkListExistMusic = async (listId: string, musicId: string) => {
-  return dbService.checkListExistMusic(listId, musicId)
-}
-
-const initScrollInfo = async () => {
-  // eslint-disable-next-line require-atomic-updates, @typescript-eslint/no-unnecessary-condition
-  scrollInfo ??= new Map(Object.entries(await getScrollInfo()))
-}
-const saveListScrollInfoThrottle = throttle(() => {
-  void saveScrollInfo(Object.fromEntries(scrollInfo))
-}, 500)
-export const getListScrollInfo = async () => {
-  await initScrollInfo()
-  return Object.fromEntries(scrollInfo)
-}
-export const saveListScrollPosition = async (id: string, position: number) => {
-  await initScrollInfo()
-  scrollInfo.set(id, position)
-  saveListScrollInfoThrottle()
-}
-const removeListScrollInfo = async (ids: string[]) => {
-  await initScrollInfo()
-  for (const id of ids) scrollInfo.delete(id)
-  saveListScrollInfoThrottle()
-}
-const overrideListScrollInfo = async (ids: string[]) => {
-  await initScrollInfo()
-  for (const id of scrollInfo.keys()) {
-    if (ids.includes(id)) continue
-    scrollInfo.delete(id)
-  }
-  saveListScrollInfoThrottle()
-}
-
-const updateSongCount = async (listIds: string[]) => {
-  let updatedLists: AnyListen.List.MyListInfo[] = []
-  const targetLists = await dbService.getListInfos(listIds)
-  for (const targetList of targetLists) {
-    if (targetList) updatedLists.push(targetList)
-  }
-  if (updatedLists.length) {
-    void musicListEvent.listAction({ action: 'list_update', data: { lists: updatedLists, sync: true } })
-  }
-}
-export const sendMusicListAction = async (action: AnyListen.IPCList.ActionList) => {
-  validateAction?.(action)
-  await musicListEvent.listAction(action)
-  switch (action.action) {
-    case 'list_music_overwrite':
-      void updateSongCount([action.data.listId])
-      break
-    case 'list_music_add':
-      void updateSongCount([action.data.id])
-      break
-    case 'list_music_move':
-      void updateSongCount([action.data.toId, action.data.fromId])
-      break
-    case 'list_music_remove':
-      void updateSongCount([action.data.listId])
-      break
-    case 'list_music_clear':
-      void updateSongCount(action.data)
-      break
-    case 'list_data_overwrite': {
-      const ids = [LIST_IDS.DEFAULT, LIST_IDS.LOVE, ...action.data.userList.map((l) => l.id)]
-      void updateSongCount(ids)
-      void overrideListScrollInfo(ids)
-      break
-    }
-    case 'list_remove':
-      void removeListScrollInfo(action.data)
-      break
-    default:
-  }
-}
-
-export const updateMusicPic = async (listId: string, musicInfo: AnyListen.Music.MusicInfo) => {
-  await musicListEvent.list_music_update_pic(listId, musicInfo)
-}
-
-// export const updateMusicPicIfNeeded = ({ listId, source, musicInfo }: AnyListen.IPCMusic.GetMusicPicInfo, picUrl: string) => {
-//   if (!listId || !picUrl || musicInfo.meta.picUrl == picUrl) return
-//   musicInfo.meta.picUrl = picUrl
-//   void updateMusicPic(listId, musicInfo)
-// }
-
-export const updateMusicBaseInfo = async (listId: string, musicInfos: AnyListen.Music.MusicInfo[]) => {
-  await musicListEvent.list_music_base_info_update(listId, musicInfos)
-}
-
-export const onMusicListAction = (listAction: (action: AnyListen.IPCList.ActionList) => Promise<void>): (() => void) => {
-  musicListEvent.on('listAction', listAction)
-  return () => {
-    musicListEvent.off('listAction', listAction)
-  }
+export const getAllUserLists = () => musicList.getAllUserLists()
+export const getListMusics = (id: string) => musicList.getListMusics(id)
+export const getListsCover = (...args: Parameters<typeof musicList.getListsCover>) => musicList.getListsCover(...args)
+export const clearListCoverCache = (id?: string) => musicList.clearListCoverCache(id)
+export const getMusicExistListIds = (id: string) => musicList.getMusicExistListIds(id)
+export const checkListExistMusic = (listId: string, musicId: string) => musicList.checkListExistMusic(listId, musicId)
+export const getListScrollInfo = () => musicList.getListScrollInfo()
+export const saveListScrollPosition = (id: string, position: number) => musicList.saveListScrollPosition(id, position)
+export const sendMusicListAction = (action: AnyListen.IPCList.ActionList) => musicList.sendMusicListAction(action)
+export const updateMusicPic = (...args: Parameters<typeof musicList.updateMusicPic>) => musicList.updateMusicPic(...args)
+export const updateMusicBaseInfo = (...args: Parameters<typeof musicList.updateMusicBaseInfo>) =>
+  musicList.updateMusicBaseInfo(...args)
+export const onMusicListAction = (callback: (action: AnyListen.IPCList.ActionList) => Promise<void>) =>
+  musicListEvent.on('listAction', callback)
+export const closeMusicList = async () => {
+  stopSyncUserListTask()
+  await musicList?.close()
 }
 
 const updateMusicPosition = async (listId: string, ids: string[]) => {

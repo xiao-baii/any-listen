@@ -116,6 +116,7 @@ export const buildConfig = (mode: string): UserConfig => {
         input: {
           index: path.join(projectPath, 'src/index.ts'),
           accounts: path.join(projectPath, 'src/accounts/index.ts'),
+          'accounts-db.worker': path.join(projectPath, 'src/accounts/database.worker.ts'),
           'db-service.worker': path.join(rootPath, 'packages/shared/app/modules/worker/dbService/index.ts'),
           'util-service.worker': path.join(rootPath, 'packages/shared/app/modules/worker/utilService/index.ts'),
           'extension-service.worker': path.join(rootPath, 'packages/shared/app/modules/worker/extensionService/index.ts'),

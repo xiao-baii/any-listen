@@ -5,6 +5,9 @@ import type { DBSeriveTypes } from '../worker/utils'
 let dbService: DBSeriveTypes
 
 export class Event extends _Event {
+  constructor(private database?: DBSeriveTypes) {
+    super()
+  }
   emitEvent<K extends keyof EventMethods>(eventName: K, ...args: unknown[]) {
     this.emit(eventName, ...args)
   }
@@ -19,7 +22,7 @@ export class Event extends _Event {
    * @param isRemote 是否属于远程操作
    */
   async dislike_data_overwrite(dislikeData: AnyListen.Dislike.DislikeRules, isRemote = false) {
-    await dbService.dislikeInfoOverwrite(dislikeData)
+    await (this.database ?? dbService).dislikeInfoOverwrite(dislikeData)
     this.emit('dislike_data_overwrite', dislikeData, isRemote)
     this.dislike_changed()
   }
@@ -33,7 +36,7 @@ export class Event extends _Event {
    */
   async dislike_music_add(musicInfo: AnyListen.Dislike.DislikeMusicInfo[], isRemote = false) {
     // const changedIds =
-    await dbService.dislikeInfoAdd(musicInfo)
+    await (this.database ?? dbService).dislikeInfoAdd(musicInfo)
     // await checkUpdateDislike(changedIds)
     this.emit('dislike_music_add', musicInfo, isRemote)
     this.dislike_changed()
@@ -46,7 +49,7 @@ export class Event extends _Event {
    */
   async dislike_music_clear(isRemote = false) {
     // const changedIds =
-    await dbService.dislikeInfoOverwrite('')
+    await (this.database ?? dbService).dislikeInfoOverwrite('')
     // await checkUpdateDislike(changedIds)
     this.emit('dislike_music_clear', isRemote)
     this.dislike_changed()

@@ -22,4 +22,5 @@ class Event extends _Event {
 
 type EventMethods = Omit<Event, keyof _Event | 'emitEvent'>
 
-export const socketEvent = new Event() as EventType<Event>
+export const createSocketEvent = () => new Event() as EventType<Event>
+export const socketEvent = createSocketEvent()

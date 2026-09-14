@@ -15,14 +15,18 @@ import {
 } from '@any-listen/app/modules/musicList'
 
 import { validatePersonalData } from '@/accounts/backup'
-import { managed, managedRole } from '@/accounts/managed'
-import { getListsCover } from '@/app/modules/musicList'
+import { managed } from '@/accounts/managed'
+import { getListsCover, syncOnlineList } from '@/app/modules/musicList'
 import { broadcast } from '@/modules/ipc/websocket'
 
 import type { ExposeClientFunctions, ExposeServerFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposeList = () => {
+export const createExposeList = (service = { getAllUserLists, getListMusics, getListsCover, getMusicExistListIds,
+  checkListExistMusic, sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncOnlineList, sortListMusics }, onlineOnly = managed) => {
+  const { getAllUserLists, getListMusics, getListsCover, getMusicExistListIds, checkListExistMusic,
+    sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncOnlineList, sortListMusics } = service
+  const managed = onlineOnly
   return {
     async getAllUserLists(event) {
       return getAllUserLists()
@@ -40,7 +44,7 @@ export const createExposeList = () => {
       return checkListExistMusic(listId, musicId)
     },
     async listAction(event, action) {
-      if (managed && managedRole() !== 'admin') validatePersonalData(action)
+      if (managed) validatePersonalData(action)
       return sendMusicListAction(action)
     },
     async getListScrollPosition(event) {
@@ -56,6 +60,11 @@ export const createExposeList = () => {
       return cancelAddFolderMusics(taskId)
     },
     async syncUserList(event, id) {
+      if (managed) {
+        const list = (await getAllUserLists()).userList.find((list) => list.id === id)
+        if (list?.type !== 'online') throw new Error('Not an online list')
+        return syncOnlineList(list)
+      }
       return syncUserList(id)
     },
     async parseMusicMetadata(event, listId, musicInfo) {
@@ -68,7 +77,8 @@ export const createExposeList = () => {
 }
 
 // 暴露给后端的方法
-export const createServerList = () => {
+export const createServerList = (send = broadcast, subscribe = onMusicListAction, subscriptions?: Array<() => void>) => {
+  const broadcast = send
   const actions = {
     async listAction(action) {
       broadcast((socket) => {
@@ -79,7 +89,8 @@ export const createServerList = () => {
   } satisfies Partial<ExposeServerFunctions>
 
   // eslint-disable-next-line @typescript-eslint/unbound-method
-  onMusicListAction(actions.listAction)
+  const unsubscribe = subscribe(actions.listAction)
+  subscriptions?.push(unsubscribe)
 
   return actions
 }

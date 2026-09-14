@@ -26,6 +26,10 @@ jobs:
       - run: pnpm -F @shared/eslint exec tsc -p ../../web-server/tsconfig.accounts.json
       - run: SKIP_LIB_COPY= pnpm build:web
       - run: node packages/web-server/tests/run.cjs
+      - run: node packages/web-server/tests/run.cjs database.test.ts
+      - run: node packages/web-server/tests/run.cjs sharedSources.test.ts
+      - run: node packages/web-server/tests/run.cjs player.test.ts
+      - run: node packages/web-server/tests/run.cjs musicList.test.ts
       - name: Test supported official extensions
         run: |
           mkdir -p work/extension-packages/loader work/extension-packages/metadata

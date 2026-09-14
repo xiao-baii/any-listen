@@ -19,7 +19,7 @@ const main = async () => {
     const passwordFile = process.env.ADMIN_PASSWORD_FILE
     if (!passwordFile) throw new Error('Set ADMIN_PASSWORD_FILE to a file containing the initial password')
     const user = await accounts.create(username, (await readFile(passwordFile, 'utf8')).trimEnd(), 'admin', null)
-    console.log(`Administrator created: ${user.username} (${user.id}). Password change required on first login.`)
+    console.log(`Administrator created: ${user.username} (${user.id}).`)
     accounts.close()
     return
   }

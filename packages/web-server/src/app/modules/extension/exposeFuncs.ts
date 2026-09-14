@@ -8,7 +8,7 @@ import { managed, managedRole } from '@/accounts/managed'
 import { extensionEvent } from '@/app/modules/extension'
 
 import { createExtensionIconPublicPath, removeExtensionIconPublicPath } from '../fileSystem'
-import { getPlayInfo, playerEvent } from '../player'
+import { getPlayInfo, getPlayerEvent } from '../player'
 import { boxTools } from './clientTools'
 
 /**
@@ -32,13 +32,13 @@ export const exposedFuncs: AnyListen.IPCExtension.MainIPCActions = {
     return getPlayInfo()
   },
   async playerAction(action) {
-    playerEvent.playerAction(action)
+    getPlayerEvent().playerAction(action)
   },
   async playListAction(action) {
-    await playerEvent.playListAction(action)
+    await getPlayerEvent().playListAction(action)
   },
   async playHistoryListAction(action) {
-    await playerEvent.playHistoryListAction(action)
+    await getPlayerEvent().playHistoryListAction(action)
   },
 
   async getAllUserLists() {
@@ -59,7 +59,7 @@ export const exposedFuncs: AnyListen.IPCExtension.MainIPCActions = {
   },
 
   async showMessageBox(key, extId, options) {
-    if (managed && managedRole() !== 'admin') return undefined
+    if (managed && managedRole() !== 'admin') return -1
     return boxTools.showBox(key, extId, options.modal === true, async (socket) => {
       return socket.remote.showMessageBox(key, extId, options)
     })

@@ -79,3 +79,4 @@ publish/utils/githubToken.js
 src/**/*-internal.js
 /work/
 packages/web-server/tests/.generated/
+packages/web-server/tests/.memory.generated.cjs

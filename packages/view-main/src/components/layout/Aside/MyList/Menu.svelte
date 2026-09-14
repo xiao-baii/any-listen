@@ -8,6 +8,7 @@
   import { musicLibraryEvent } from '@/modules/musicLibrary/store/event'
   import { appState } from '@/modules/app/store/state'
   import { GENERAL_LIST_TYPES } from '@/shared/constants'
+  import { account } from '@/accounts/state.svelte'
 
   let {
     onhide,
@@ -64,8 +65,8 @@
         !isGeneral && { action: 'update', disabled: disabledUpdate, label: $t('user_list_menu__sync') },
         { action: 'create', label: $t('user_list_menu__create') },
         { action: 'edit', disabled: !edit, label: $t('user_list_menu__edit') },
-        isGeneral && { action: 'local_file', disabled: fetching, label: $t('user_list_menu__select_local_file') },
-        isGeneral && { action: 'local_file_folder', disabled: fetching, label: $t('user_list_menu__select_local_file_folder') },
+        isGeneral && !account.enabled && { action: 'local_file', disabled: fetching, label: $t('user_list_menu__select_local_file') },
+        isGeneral && !account.enabled && { action: 'local_file_folder', disabled: fetching, label: $t('user_list_menu__select_local_file_folder') },
         // null,
         // { action: 'sort', label: $t('user_list_menu__sort_list') },
         // { action: 'duplicate', label: $t('user_list_menu__duplicate') },

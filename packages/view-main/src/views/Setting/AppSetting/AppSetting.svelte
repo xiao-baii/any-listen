@@ -5,7 +5,7 @@
   import { settings } from './settings'
   import { account } from '@/accounts/state.svelte'
 
-  const visibleSettings = $derived(account.enabled ? settings.filter((s) => !['security', 'update', 'backup', 'extension', 'network'].includes(s.id)) : settings)
+  const visibleSettings = $derived(account.enabled ? settings.filter((s) => !['security', 'update', 'backup', 'extension', 'network', 'onlineResource', 'dataSync'].includes(s.id)) : settings)
   const activeSetting = $derived(visibleSettings.find((e) => e.id == $query.id) ?? visibleSettings[0])
 </script>
 

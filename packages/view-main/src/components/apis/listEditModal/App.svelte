@@ -91,6 +91,8 @@
     flex: auto;
     flex-flow: column nowrap;
     width: 480px;
+    max-width: 100%;
+    min-width: 0;
     min-height: 0;
     padding: 0 15px;
     // max-height: 100%;

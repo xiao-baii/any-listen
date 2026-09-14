@@ -14,7 +14,6 @@ async function main() {
       for (const username of ['preview-admin', 'preview-user']) {
         if (!accounts.find(username)) {
           const user = await accounts.create(username, 'Preview-local-12345', username === 'preview-admin' ? 'admin' : 'user', null);
-          await accounts.password(user.id, 'Preview-local-12345', false, user.id);
         }
       }
       accounts.close();

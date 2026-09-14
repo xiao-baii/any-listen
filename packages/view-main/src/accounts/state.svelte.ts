@@ -3,7 +3,6 @@ export interface CurrentUser {
   username: string
   role: 'admin' | 'user'
   disabled: number
-  mustChangePassword: number
 }
 export const account = $state<{ enabled: boolean; ready: boolean; user: CurrentUser | null; error: string }>({
   enabled: false,

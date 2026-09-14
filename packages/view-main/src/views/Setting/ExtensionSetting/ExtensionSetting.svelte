@@ -7,6 +7,7 @@
   import { getAllExtensionSettings } from '@/modules/extension/store/actions'
   import { extensionEvent } from '@/modules/extension/store/event'
   import type { ExtenstionListItem } from './shared'
+  import { account } from '@/accounts/state.svelte'
 
   let extSettings = $state<AnyListen.Extension.ExtensionSetting[]>([])
 
@@ -36,6 +37,10 @@
               break
             default:
               break
+          }
+          if (account.enabled && (ss.type === 'configCheckbox' || ss.type === 'configCheckboxMultiple')) {
+            ss.actionCommands = []
+            ss.actionCommandNames = []
           }
           return ss
         }),

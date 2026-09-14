@@ -12,7 +12,7 @@ export const validatePersonalData = (value: unknown, depth = 0): void => {
     return
   }
   const record = value as Record<string, unknown>
-  if (record.type === 'local' || record.type === 'remote')
+  if (record.type === 'local' || record.type === 'remote' || record.isLocal === true)
     throw new Error('Server file and remote-provider lists cannot be imported')
   for (const [key, item] of Object.entries(record)) {
     if (['__proto__', 'constructor', 'prototype', 'filePath', 'deviceId'].includes(key))
@@ -21,11 +21,12 @@ export const validatePersonalData = (value: unknown, depth = 0): void => {
   }
 }
 
-export const registerAccountBackup = (router: Router<unknown, AnyListen.RequestContext>) => {
-  if (!managed) return
+export const registerAccountBackup = (router: Router<unknown, AnyListen.RequestContext>,
+  database = workers.dbService, sendAction = sendMusicListAction, onlineOnly = managed) => {
+  if (!onlineOnly) return
   router.get('/account-backup', async (ctx) => {
     ctx.set('Content-Disposition', 'attachment; filename="any-listen-playlists.json"')
-    ctx.body = { format: 'any-listen-personal-v1', songlist: await workers.dbService.getAllListData() }
+    ctx.body = { format: 'any-listen-personal-v1', songlist: await database.getAllListData() }
   })
   router.post('/account-backup', async (ctx) => {
     let size = 0
@@ -63,7 +64,7 @@ export const registerAccountBackup = (router: Router<unknown, AnyListen.RequestC
             throw new Error('Invalid song')
       }
       validatePersonalData(lists)
-      await sendMusicListAction({ action: 'list_data_overwrite', data: lists })
+      await sendAction({ action: 'list_data_overwrite', data: lists })
       ctx.body = { ok: true }
     } catch (error) {
       ctx.throw(400, (error as Error).message)

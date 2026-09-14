@@ -49,6 +49,7 @@ let isInitialized = false
 export const init = () => {
   if (isInitialized) return
   isInitialized = true
+  Object.assign(rendererIPC, createServerPlayer())
 
   const exposeObj: ExposeClientFunctions = {
     ...createExposeApp(),
@@ -65,10 +66,14 @@ export const init = () => {
     ...createExposeSync(),
   }
 
-  socketEvent.on('new_socket', (socket) => {
+  connectRenderer(socketEvent, protectRpc(exposeObj))
+}
+
+export const connectRenderer = (events: typeof socketEvent, exposeObj: Record<string, (...args: any[]) => any>) => {
+  return events.on('new_socket', (socket) => {
     if (socket.winType != 'main') return
     const msg2call = createMessage2Call<AnyListen.IPC.ClientCommonActions>({
-      exposeObj: protectRpc(exposeObj),
+      exposeObj,
       timeout: 0,
       isSendErrorStack: import.meta.env.DEV,
       sendMessage(data) {
@@ -91,7 +96,6 @@ export const init = () => {
     socket.remoteQueueTheme = msg2call.createRemoteGroup('theme', { queue: true, timeout: 0 })
     socket.remoteQueuePlayer = msg2call.createRemoteGroup('player', { queue: true, timeout: 0 })
     socket.remoteQueueList = msg2call.createRemoteGroup('list', { queue: true, timeout: 0 })
-    socket.remoteQueueList = msg2call.createRemoteGroup('list', { queue: true, timeout: 0 })
     socket.remoteQueueDislike = msg2call.createRemoteGroup('dislike', { queue: true, timeout: 0 })
     socket.remoteQueueSync = msg2call.createRemoteGroup('sync', { queue: true, timeout: 0 })
     socket.remoteQueueExtension = msg2call.createRemoteGroup('extension_q', { queue: true, timeout: 0 })
@@ -105,13 +109,13 @@ export const init = () => {
   })
 }
 
-export const rendererIPC: ExposeServerFunctions = {
+export const rendererIPC = {
   ...createServerApp(),
-  ...createServerPlayer(),
+  // Player listeners must bind after the account player has been initialized.
   ...createServerHotkey(),
   ...createServerList(),
   ...createServerDislike(),
   ...createServerTheme(),
   ...createServerExtension(),
   ...createServerSync(),
-}
+} as ExposeServerFunctions

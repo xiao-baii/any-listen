@@ -161,7 +161,17 @@ const heartbeatTools = {
   handleClose(event: CloseEvent) {
     console.log(event.code)
     if (event.code === 1012 && location.pathname.startsWith('/u/')) {
-      location.reload()
+      heartbeatTools.clearTimeout()
+      window.dispatchEvent(new Event('anylisten-maintenance'))
+      const wait = async () => {
+        try {
+          const response = await fetch('/account-api/maintenance')
+          if (response.status === 401) { location.assign('/'); return }
+          if (response.ok && !(await response.json()).running) { location.reload(); return }
+        } catch {}
+        setTimeout(() => { void wait() }, 1500 + Math.random() * 1000)
+      }
+      void wait()
       return
     }
     switch (event.code) {

@@ -8,8 +8,7 @@ import { initBackupTask, initBackupPath } from './backupTask'
 import migrateData from './migrate'
 import tables, { DB_VERSION } from './tables'
 import verifyDB from './verifyDB'
-
-let db: Database.Database
+import { getDatabaseContext } from './context'
 
 const initTables = (db: Database.Database) => {
   let now = Date.now()
@@ -29,7 +28,7 @@ const initTables = (db: Database.Database) => {
 
 export const backupDB = async (dataPath: string, nativeBindingPath: string, backupPath: string) => {
   const databasePath = path.join(dataPath, DB_NAME)
-  const nativeBinding = path.join(__dirname, nativeBindingPath)
+  const nativeBinding = path.resolve(__dirname, nativeBindingPath)
   const db = new Database(databasePath, { nativeBinding })
   await db.backup(backupPath)
   db.close()
@@ -43,8 +42,11 @@ export const init = async (
   machineId: string,
   backupPath?: string
 ): Promise<boolean | null> => {
+  const context = getDatabaseContext()
+  if (context.db?.open) throw new Error('Database is already initialized')
+  let db: Database.Database
   const databasePath = path.join(dataPath, DB_NAME)
-  const nativeBinding = path.join(__dirname, nativeBindingPath)
+  const nativeBinding = path.resolve(__dirname, nativeBindingPath)
   let dbFileExists = true
 
   try {
@@ -54,7 +56,7 @@ export const init = async (
       // verbose: process.env.NODE_ENV !== 'production' ? console.log : undefined,
     })
   } catch (error) {
-    console.log(error)
+    if (!context.managed) console.log(error)
     db = new Database(databasePath, {
       nativeBinding,
       // verbose: process.env.NODE_ENV !== 'production' ? console.log : undefined,
@@ -62,6 +64,7 @@ export const init = async (
     initTables(db)
     dbFileExists = false
   }
+  context.db = db
   db.pragma('journal_mode = WAL')
 
   if (dbFileExists) migrateData(db, machineId)
@@ -73,21 +76,27 @@ export const init = async (
     db.close()
     return null
   }
-  initBackupPath(getDefaultAutoBackupPath(dataPath), backupPath || '')
-  await initBackupTask(db)
+  if (!context.managed) {
+    initBackupPath(getDefaultAutoBackupPath(dataPath), backupPath || '')
+    await initBackupTask(db)
+  }
 
   // https://www.sqlite.org/lang_vacuum.html
   // db.exec('VACUUM "main"')
 
-  process.on('exit', () => db.close())
+  if (!context.managed) process.once('exit', () => { if (db.open) db.close() })
   console.log('db inited')
   // require('./test')
   return dbFileExists
 }
 
 // 获取数据库实例
-export const getDB = (): Database.Database => db
+export const getDB = (): Database.Database => {
+  const db = getDatabaseContext().db
+  if (!db?.open) throw new Error('Database is not initialized')
+  return db
+}
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export const dbPrepare = <T extends {} | unknown[] = [], R = undefined>(sql: string) => {
-  return db.prepare<T, R>(sql)
+  return getDB().prepare<T, R>(sql)
 }

@@ -11,9 +11,11 @@ const initState = async () => {
     extensionState.resources = event.data
   })
 }
-export const initExtensionModule = async () => {
-  await initRemoteListProvider()
-  await initOnlineListProvider()
+export const initExtensionModule = async (options: { onlineOnly?: boolean } = {}) => {
+  if (!options.onlineOnly) {
+    await initRemoteListProvider()
+    await initOnlineListProvider()
+  }
   await initState()
 }
 

@@ -1,7 +1,7 @@
 import { isValidLyric } from '@any-listen/common/tools'
 import { parseLyrics } from '@any-listen/nodejs/lrcTool'
 
-import { langS2T } from './common'
+export { lyricS2T } from './common'
 import {
   createLocalMusicInfo,
   getLocalMusicFileLyric,
@@ -82,19 +82,5 @@ export const removeMusicFiles = async (paths: string[]) => {
 export { parseLocalMusicInfoMetadata } from './shared/music'
 
 export { scanFolderMusics, stopFolderMusicsScan } from './scanMusics'
-
-export const lyricS2T = async (lyricInfo: AnyListen.Music.LyricInfo) => {
-  lyricInfo.lyric &&= langS2T(lyricInfo.lyric)
-  lyricInfo.tlyric &&= langS2T(lyricInfo.tlyric)
-  lyricInfo.rlyric &&= langS2T(lyricInfo.rlyric)
-  lyricInfo.awlyric &&= langS2T(lyricInfo.awlyric)
-  if (lyricInfo.rawlrcInfo) {
-    lyricInfo.rawlrcInfo.lyric &&= langS2T(lyricInfo.rawlrcInfo.lyric)
-    lyricInfo.rawlrcInfo.tlyric &&= langS2T(lyricInfo.rawlrcInfo.tlyric)
-    lyricInfo.rawlrcInfo.rlyric &&= langS2T(lyricInfo.rawlrcInfo.rlyric)
-    lyricInfo.rawlrcInfo.awlyric &&= langS2T(lyricInfo.rawlrcInfo.awlyric)
-  }
-  return lyricInfo
-}
 
 export { getStrmFileUrl } from './shared/music'

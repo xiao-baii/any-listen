@@ -46,3 +46,4 @@ export {
 
 export { getPlayInfo, setPlayInfo, setPlayMusic, setPlayTime } from './playInfo'
 export { getPlayMusicInfo, setPlayMusicInfo } from './state'
+export { createPlayer } from './service'

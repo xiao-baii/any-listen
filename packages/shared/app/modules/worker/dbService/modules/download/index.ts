@@ -1,8 +1,14 @@
+import { databaseState } from '../../context'
+
+const getState = () => databaseState('download/index.ts', () => ({
+  list: undefined as unknown as AnyListen.Download.ListItem[],
+}))
+
 import { arrPush, arrUnshift } from '@any-listen/common/utils'
 
 import { clearDownloadList, deleteDownloadList, inertDownloadList, queryDownloadList, updateDownloadList } from './dbHelper'
 
-let list: AnyListen.Download.ListItem[]
+
 
 const toDBDownloadInfo = (musicInfos: AnyListen.Download.ListItem[], offset = 0): AnyListen.DBService.DownloadMusicInfo[] => {
   return musicInfos.map((info, index) => {
@@ -25,7 +31,7 @@ const toDBDownloadInfo = (musicInfos: AnyListen.Download.ListItem[], offset = 0)
 }
 
 const initDownloadList = () => {
-  list = queryDownloadList().map((item) => {
+  getState().list = queryDownloadList().map((item) => {
     const musicInfo = JSON.parse(item.musicInfo) as AnyListen.Music.MusicInfoOnline
     return {
       id: item.id,
@@ -55,8 +61,8 @@ const initDownloadList = () => {
  */
 export const getDownloadList = (): AnyListen.Download.ListItem[] => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (!list) initDownloadList()
-  return list
+  if (!getState().list) initDownloadList()
+  return getState().list
 }
 
 /**
@@ -68,9 +74,9 @@ export const downloadInfoSave = (
   addMusicLocationType: AnyListen.AddMusicLocationType
 ) => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (!list) initDownloadList()
+  if (!getState().list) initDownloadList()
   if (addMusicLocationType == 'top') {
-    let newList = [...list]
+    let newList = [...getState().list]
     arrUnshift(newList, downloadInfos)
     inertDownloadList(
       toDBDownloadInfo(downloadInfos),
@@ -78,10 +84,10 @@ export const downloadInfoSave = (
         return { id: info.id, position: index }
       })
     )
-    list = newList
+    getState().list = newList
   } else {
-    inertDownloadList(toDBDownloadInfo(downloadInfos, list.length), [])
-    arrPush(list, downloadInfos)
+    inertDownloadList(toDBDownloadInfo(downloadInfos, getState().list.length), [])
+    arrPush(getState().list, downloadInfos)
   }
 }
 
@@ -92,11 +98,11 @@ export const downloadInfoSave = (
 export const downloadInfoUpdate = (lists: AnyListen.Download.ListItem[]) => {
   updateDownloadList(toDBDownloadInfo(lists))
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (list) {
+  if (getState().list) {
     for (const item of lists) {
-      const index = list.findIndex((info) => info.id === item.id)
+      const index = getState().list.findIndex((info) => info.id === item.id)
       if (index < 0) continue
-      list.splice(index, 1, item)
+      getState().list.splice(index, 1, item)
     }
   }
 }
@@ -108,9 +114,9 @@ export const downloadInfoUpdate = (lists: AnyListen.Download.ListItem[]) => {
 export const downloadInfoRemove = (ids: string[]) => {
   deleteDownloadList(ids)
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (list) {
+  if (getState().list) {
     const idSet = new Set<string>(ids)
-    list = list.filter((task) => !idSet.has(task.id))
+    getState().list = getState().list.filter((task) => !idSet.has(task.id))
   }
 }
 

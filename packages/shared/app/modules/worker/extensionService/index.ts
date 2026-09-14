@@ -65,8 +65,12 @@ const extension = {
     onlineExtensionHost: string
     gHMirrorHosts: string
     enableDebug: boolean
+    onlineOnly?: boolean
+    draftOnly?: boolean
   }) {
     extensionState.locale = state.locale
+    extensionState.onlineOnly = state.onlineOnly ?? false
+    extensionState.draftOnly = state.draftOnly ?? false
     extensionState.proxy.host = state['proxy.host']
     extensionState.proxy.port = state['proxy.port']
     extensionState.clientType = state.clientType

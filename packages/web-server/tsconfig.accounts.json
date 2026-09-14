@@ -5,11 +5,14 @@
     "composite": false,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["@any-listen/nodejs/node_modules/@types/node"],
-    "paths": { "better-sqlite3": ["../shared/app/node_modules/@types/better-sqlite3/index.d.ts"] }
+    "types": ["@any-listen/types", "@any-listen/app", "@any-listen/nodejs/node_modules/@types/node"],
+    "paths": { "@/*": ["./src/*"], "better-sqlite3": ["../shared/app/node_modules/@types/better-sqlite3/index.d.ts"] }
   },
   "references": [],
   "include": [
+    "src/types/*.d.ts",
+    "src/app/types/*.d.ts",
+    "../shared/app/types/common.d.ts",
     "../shared/nodejs/publicNetwork.ts",
     "src/accounts/database.ts",
     "src/accounts/bootstrap.ts",

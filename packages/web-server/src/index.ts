@@ -108,8 +108,8 @@ global.anylisten.config.allowPublicDir = global.anylisten.config.allowPublicDir.
   if (!newP.endsWith(path.sep)) return newP + path.sep
   return newP
 })
-if (envParams.EXTENSION_GH_MIRROR_HOSTS) {
-  global.anylisten.config['extension.ghMirrorHosts'] = envParams.EXTENSION_GH_MIRROR_HOSTS.split(',')
+if (envParams.EXTENSION_GH_MIRROR_HOSTS || (managed && process.env.EXTENSION_GH_MIRROR_HOSTS !== undefined)) {
+  global.anylisten.config['extension.ghMirrorHosts'] = (process.env.EXTENSION_GH_MIRROR_HOSTS ?? envParams.EXTENSION_GH_MIRROR_HOSTS ?? '').split(',')
 }
 global.anylisten.config['extension.ghMirrorHosts'] = formatExtensionGHMirrorHosts(
   global.anylisten.config['extension.ghMirrorHosts']
@@ -207,6 +207,14 @@ server.on('listening', async () => {
     const { initApp } = await import('./app')
     await initApp()
     if (managed && typeof addr === 'object' && addr) {
+      const { updateSetting } = await import('./app/app')
+      process.on('message', (message: { type?: string; proxyAllResources?: boolean; onlineResourceEnabled?: boolean; ghMirrorHosts?: string }) => {
+        if (message.type !== 'siteSettings' || typeof message.proxyAllResources !== 'boolean' || typeof message.onlineResourceEnabled !== 'boolean' || typeof message.ghMirrorHosts !== 'string') return
+        process.env.ANYLISTEN_PROXY_ALL_RESOURCES = String(message.proxyAllResources)
+        process.env.ANYLISTEN_ONLINE_RESOURCE_ENABLED = String(message.onlineResourceEnabled)
+        global.anylisten.config['extension.ghMirrorHosts'] = formatExtensionGHMirrorHosts(message.ghMirrorHosts.split('\n'))
+        updateSetting({ 'network.proxyAllResources': message.proxyAllResources, 'onlineResource.enable': message.onlineResourceEnabled, 'extension.ghMirrorHosts': message.ghMirrorHosts })
+      })
       process.send?.({ type: 'ready', port: addr.port })
       const { busyTasks } = await import('./accounts/lifecycle')
       setInterval(() => process.send?.({ type: 'metrics', rss: process.memoryUsage().rss, busy: busyTasks() }), 1000).unref()

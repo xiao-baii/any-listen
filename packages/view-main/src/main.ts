@@ -12,6 +12,7 @@ import { initTooltips } from './components/apis/tooltips/global'
 import { connectIPC, registerModules } from './modules'
 import { initIpcDesktopLyric } from './shared/ipcLyric/init'
 import { initWorkers } from './worker'
+import { pause } from './modules/player/store/playerActions'
 
 // import './components/base/VirtualizedList'
 void initWorkers()
@@ -22,11 +23,12 @@ mount(App, {
 initNotify()
 
 registerModules()
+if (import.meta.env.VITE_IS_WEB) window.addEventListener('anylisten-maintenance', pause)
 initIpcDesktopLyric()
 void initAccount().then(() => {
   if (
     !account.enabled ||
-    (account.user && !account.user.mustChangePassword && location.pathname.startsWith(`/u/${account.user.id}/`))
+    (account.user && location.pathname.startsWith(`/u/${account.user.id}/`))
   )
     connectIPC()
 })

@@ -6,7 +6,18 @@ const scriptsRequire = createRequire(path.resolve(__dirname, '../../shared/scrip
 const out = path.join(__dirname, '.generated')
 async function main() {
   const testFile = process.argv[2] ?? 'accounts.test.ts'
-  if (!['accounts.test.ts', 'extensions.test.ts'].includes(testFile)) throw new Error('Unknown test file')
+  if (!['accounts.test.ts', 'extensions.test.ts', 'database.test.ts', 'sharedSources.test.ts', 'player.test.ts', 'musicList.test.ts'].includes(testFile)) throw new Error('Unknown test file')
+  if (testFile === 'database.test.ts') {
+    await scriptsRequire('esbuild').build({
+      entryPoints: [path.join(__dirname, '../src/accounts/database.worker.ts')],
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      outfile: path.join(out, 'database.worker.cjs'),
+      external: ['better-sqlite3'],
+      tsconfig: path.join(__dirname, '../tsconfig.json'),
+    })
+  }
   await scriptsRequire('esbuild').build({
     entryPoints: [path.join(__dirname, testFile)],
     bundle: true,
@@ -15,6 +26,7 @@ async function main() {
     outfile: path.join(out, 'accounts.test.cjs'),
     external: ['better-sqlite3', 'ws'],
     tsconfig: path.join(__dirname, '../tsconfig.json'),
+    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true', 'import.meta.env.VITE_IS_DESKTOP': 'false', '__GIT_COMMIT__': '""', '__GIT_COMMIT_DATE__': '""' },
   })
   const result = spawnSync(process.execPath, ['--test', path.join(out, 'accounts.test.cjs')], {
     stdio: 'inherit',
