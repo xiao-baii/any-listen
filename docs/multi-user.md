@@ -131,7 +131,7 @@ location / {
 
 代码导航、测试命令、验证结果及同步 main 的注意事项统一见 [开发指南](single-process-development.md)。本机预览命令和测试账号也见该文档，不用于生产。
 
-`main` 用于同步上游，功能改动在 `multi-user` 分支维护。推送该分支会触发 Multi User 检查；检查通过不自动生成镜像。当前发布标签为 `0.1.0`。自定义工作流在 `xiao-baii/any-listen` 的 `0.1.0`、`multi-user-v*` 标签或手动运行 `multi-user` 分支通过检查后，导出 Linux AMD64 Docker TAR 至 Actions Artifacts，保留 30 天，不推送 GHCR。镜像标签为 `any-listen:<标签或分支>` 和 `any-listen:sha-<完整提交>`。
+`main` 用于同步上游，功能改动在 `multi-user` 分支维护。推送该分支会触发 Multi User 检查；检查通过不自动生成镜像。当前发布标签为 `multi-user-v0.1.0`。自定义工作流在 `xiao-baii/any-listen` 的 `multi-user-v*` 标签或手动运行 `multi-user` 分支通过检查后，导出 Linux AMD64 Docker TAR 至 Actions Artifacts，保留 30 天，不推送 GHCR。镜像标签为 `any-listen:<标签或分支>` 和 `any-listen:sha-<完整提交>`。
 
 上游 release 工作流限于原仓库执行。1Panel 文件导入使用 `compose.image.yml`，详见 [镜像导入说明](image-import.md)；本文的 `compose.multi-user.yml` 用于源码本地构建。
 
