@@ -10,8 +10,9 @@
 </script>
 
 <div class="settings-app-container">
-  {#if settings.length}
+  {#if visibleSettings.length}
     <SettingList
+      settings={visibleSettings}
       active={activeSetting.id}
       onchange={(id: string) => {
         void replace('/settings', { type: 'app', id })

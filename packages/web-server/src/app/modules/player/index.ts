@@ -290,7 +290,7 @@ export const initPlayer = async () => {
     defaultWorkers.dbService,
     defaultMusicListEvent,
     defaultSendMusicListAction,
-    Boolean(process.env.ANYLISTEN_USER_ID)
+    false
   )
   await player.initPlayer()
 }

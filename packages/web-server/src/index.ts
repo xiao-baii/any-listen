@@ -9,7 +9,6 @@ import { extname } from '@any-listen/nodejs'
 
 import { ENV_PARAMS } from '@/shared/constants'
 
-import { managed, activeCalls } from './accounts/managed'
 import { printLogo } from './app/shared/utils'
 import { destroySockets, onUpgrade } from './modules/ipc/websocket'
 import { createServerApp } from './server'
@@ -108,8 +107,8 @@ global.anylisten.config.allowPublicDir = global.anylisten.config.allowPublicDir.
   if (!newP.endsWith(path.sep)) return newP + path.sep
   return newP
 })
-if (envParams.EXTENSION_GH_MIRROR_HOSTS || (managed && process.env.EXTENSION_GH_MIRROR_HOSTS !== undefined)) {
-  global.anylisten.config['extension.ghMirrorHosts'] = (process.env.EXTENSION_GH_MIRROR_HOSTS ?? envParams.EXTENSION_GH_MIRROR_HOSTS ?? '').split(',')
+if (envParams.EXTENSION_GH_MIRROR_HOSTS) {
+  global.anylisten.config['extension.ghMirrorHosts'] = envParams.EXTENSION_GH_MIRROR_HOSTS.split(',')
 }
 global.anylisten.config['extension.ghMirrorHosts'] = formatExtensionGHMirrorHosts(
   global.anylisten.config['extension.ghMirrorHosts']
@@ -122,7 +121,6 @@ global.anylisten.config.httpProxy = global.anylisten.config.httpProxy.replace(/h
 console.log(`Allowed Public Paths:
   ${global.anylisten.config.allowPublicDir.join('\n  ') || '  No Paths'}
 `)
-if (managed) global.anylisten.config.allowPublicDir = [process.env.ANYLISTEN_IMPORT_DIR! + path.sep]
 
 if (import.meta.env.DEV) {
   global.anylisten.config['cors.enabled'] = true
@@ -143,7 +141,7 @@ initServerData()
 function normalizePort(val: string) {
   const port = parseInt(val, 10)
 
-  if (isNaN(port) || port < (managed ? 0 : 1)) {
+  if (isNaN(port) || port < 1) {
     // named pipe
     exit(`port illegal: ${val}`)
   }
@@ -206,19 +204,6 @@ server.on('listening', async () => {
   try {
     const { initApp } = await import('./app')
     await initApp()
-    if (managed && typeof addr === 'object' && addr) {
-      const { updateSetting } = await import('./app/app')
-      process.on('message', (message: { type?: string; proxyAllResources?: boolean; onlineResourceEnabled?: boolean; ghMirrorHosts?: string }) => {
-        if (message.type !== 'siteSettings' || typeof message.proxyAllResources !== 'boolean' || typeof message.onlineResourceEnabled !== 'boolean' || typeof message.ghMirrorHosts !== 'string') return
-        process.env.ANYLISTEN_PROXY_ALL_RESOURCES = String(message.proxyAllResources)
-        process.env.ANYLISTEN_ONLINE_RESOURCE_ENABLED = String(message.onlineResourceEnabled)
-        global.anylisten.config['extension.ghMirrorHosts'] = formatExtensionGHMirrorHosts(message.ghMirrorHosts.split('\n'))
-        updateSetting({ 'network.proxyAllResources': message.proxyAllResources, 'onlineResource.enable': message.onlineResourceEnabled, 'extension.ghMirrorHosts': message.ghMirrorHosts })
-      })
-      process.send?.({ type: 'ready', port: addr.port })
-      const { busyTasks } = await import('./accounts/lifecycle')
-      setInterval(() => process.send?.({ type: 'metrics', rss: process.memoryUsage().rss, busy: busyTasks() }), 1000).unref()
-    }
   } catch (error) {
     startupLog.error('Application initialization failed', error)
     process.exit(1)
@@ -232,28 +217,13 @@ server.on('upgrade', onUpgrade)
  */
 server.listen(port, bindIP)
 
-if (managed)
-  process.on('message', (message: { type?: string }) => {
-    if (message.type === 'shutdown') process.emit('SIGTERM')
-  })
-
 let shuttingDown = false
 const shutdown = () => {
   if (shuttingDown) return
   shuttingDown = true
   destroySockets()
-  server.close()
-  const timeout = setTimeout(() => process.exit(1), managed ? 19_000 : 2000)
-  void (managed ? import('./accounts/lifecycle').then((m) => m.flushAccount()) : Promise.resolve())
-    .then(() => {
-      clearTimeout(timeout)
-      process.exit(0)
-    })
-    .catch((error) => {
-      startupLog.error('Account flush failed', error)
-      process.exit(1)
-    })
+  server.close(() => process.exit(0))
+  setTimeout(() => process.exit(1), 2000).unref()
 }
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
-if (managed) process.on('disconnect', shutdown)

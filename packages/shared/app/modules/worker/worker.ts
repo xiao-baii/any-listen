@@ -3,7 +3,6 @@ import { createDBServiceWorker, createExtensionServiceWorker, createUtilServiceW
 let dbService: ReturnType<typeof createDBServiceWorker>
 let utilService: ReturnType<typeof createUtilServiceWorker>
 let extensionService: ReturnType<typeof createExtensionServiceWorker> | null
-let sharedExtensionService: ReturnType<typeof createExtensionServiceWorker>['service'] | undefined
 
 export const workers = {
   get dbService() {
@@ -13,7 +12,6 @@ export const workers = {
     return utilService
   },
   get extensionService() {
-    if (sharedExtensionService) return sharedExtensionService
     if (extensionService == null) throw new Error('Extension host not available')
     return extensionService.service
   },
@@ -25,18 +23,6 @@ export const workers = {
 
 export const startDBServiceWorker = async (onWorkerInited: () => void) => {
   dbService = createDBServiceWorker(onWorkerInited)
-}
-
-export const setExtensionService = (service: NonNullable<typeof sharedExtensionService>) => {
-  sharedExtensionService = service
-}
-
-export const setDBService = (service: typeof dbService) => {
-  dbService = service
-}
-
-export const setUtilService = (service: typeof utilService) => {
-  utilService = service
 }
 
 export const startUtilServiceWorker = async (

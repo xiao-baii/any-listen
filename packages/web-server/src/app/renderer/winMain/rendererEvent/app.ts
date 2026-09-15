@@ -3,7 +3,6 @@ import { exportData, importData } from '@any-listen/app/modules/backup'
 import { logs } from '@any-listen/app/modules/logs'
 import { proxyServerState } from '@any-listen/app/modules/proxyServer/state'
 
-import { managed, managedRole } from '@/accounts/managed'
 import { appState, setSystemMode, updateSetting } from '@/app/app'
 import { checkAllowPathError, fileSystemAction } from '@/app/modules/fileSystem'
 import { socketEvent } from '@/modules/ipc/event'
@@ -33,23 +32,13 @@ export const createExposeApp = () => {
     async getAppInfo(event) {
       return {
         machineId: appState.machineId,
-        proxyServerHost: managed ? `/u/${process.env.ANYLISTEN_USER_ID}` : proxyServerState.proxyHost,
+        proxyServerHost: proxyServerState.proxyHost,
       }
     },
     async getSetting(event) {
       return appState.appSetting
     },
     async setSetting(event, setting) {
-      if (managed)
-        for (const key of Object.keys(setting)) {
-          if (
-            key.startsWith('extension.') ||
-            key.startsWith('network.') ||
-            key.startsWith('download.') ||
-            key === 'common.tryAutoUpdate'
-          )
-            delete (setting as Record<string, unknown>)[key]
-        }
       for (const key of Object.keys(setting) as Array<keyof AnyListen.AppSetting>) {
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         if (IGINORE_KEYS.includes(key)) delete setting[key]
@@ -138,7 +127,6 @@ export const createServerApp = () => {
       })
     },
     async appLog(type, log) {
-      if (managed && managedRole() !== 'admin') return
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
         void socket.remote.appLog(type, log)

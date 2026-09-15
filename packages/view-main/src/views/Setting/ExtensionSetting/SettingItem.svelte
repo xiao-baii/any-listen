@@ -8,9 +8,13 @@
   let {
     id,
     item,
+    oncommand,
+    commandsDisabled = false,
   }: {
     id: string
     item: AnyListen.Extension.FormValueItem
+    oncommand?: (command: string) => Promise<void>
+    commandsDisabled?: boolean
   } = $props()
 </script>
 
@@ -49,6 +53,8 @@
   {:else if item.type === 'configCheckbox'}
     <ConfigCheckboxItem
       {item}
+      {oncommand}
+      {commandsDisabled}
       onchange={(val, checked) => {
         void updateExtensionSettings(id, { [item.field]: checked ? val : '' })
       }}
@@ -66,6 +72,8 @@
   {:else if item.type === 'configCheckboxMultiple'}
     <ConfigCheckboxItem
       {item}
+      {oncommand}
+      {commandsDisabled}
       onchange={(val, checked) => {
         const currentValue = [...(item.value ?? [])]
         if (checked) {

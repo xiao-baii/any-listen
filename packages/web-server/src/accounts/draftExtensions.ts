@@ -1,12 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, realpath, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { MessageChannel, Worker } from 'node:worker_threads'
 
 import type { ExtensionSeriveTypes } from '@any-listen/app/modules/worker/utils'
-import { DEFAULT_LANG, EXTENSION } from '@any-listen/common/constants'
+import { EXTENSION } from '@any-listen/common/constants'
 import defaultSetting from '@any-listen/common/defaultSetting'
 import { createMessage2Call } from 'message2call'
+import { request, type NeedBodyType } from '@any-listen/nodejs/request'
+import { pack } from '@any-listen/nodejs/tar'
 
 import { extensionIds } from './publications'
 
@@ -21,9 +23,10 @@ export const createDraftExtensions = (options: {
   directory: string
   origins: string[]
   mirrors: () => string
+  locale: () => AnyListen.Locale
   icon: (file: string) => string
 }) => {
-  let host: { service: ExtensionSeriveTypes; close: () => Promise<void> } | undefined
+  let host: { service: ExtensionSeriveTypes; locale: AnyListen.Locale; close: () => Promise<void> } | undefined
   let pending = Promise.resolve()
   let queued = 0
   let closed = false
@@ -59,7 +62,7 @@ export const createDraftExtensions = (options: {
       }, timeout: 60_000, isSendErrorStack: false, sendMessage: data => port1.postMessage(data),
     })
     port1.on('message', data => rpc.message(data))
-    const current = { service: rpc.remote, close: async () => {
+    const current = { service: rpc.remote, locale: options.locale(), close: async () => {
       rpc.destroy(); port1.close(); await worker.terminate()
     } }
     host = current
@@ -72,7 +75,7 @@ export const createDraftExtensions = (options: {
     const timer = setTimeout(() => rejectReady(new Error('Draft editor startup timed out')), 30_000)
     try {
       await ready
-      await rpc.remote.setExtensionState({ clientType: 'web', locale: DEFAULT_LANG, 'proxy.host': '', 'proxy.port': '',
+      await rpc.remote.setExtensionState({ clientType: 'web', locale: current.locale, 'proxy.host': '', 'proxy.port': '',
         configFilePath: path.join(directory, EXTENSION.configFileName), extensionDir: path.join(directory, EXTENSION.extDirName),
         dataDir: path.join(directory, EXTENSION.dataDirName), tempDir: path.join(directory, EXTENSION.tempDirName),
         preloadScript: '', onlineExtensionHost: defaultSetting['extension.onlineExtensionHost'], gHMirrorHosts: options.mirrors(),
@@ -96,7 +99,13 @@ export const createDraftExtensions = (options: {
     queued++
     clearTimeout(idle)
     const result = pending.then(async () => {
-      const { service } = await start()
+      const current = await start()
+      const { service } = current
+      const locale = options.locale()
+      if (current.locale !== locale) {
+        await service.updateLocale(locale)
+        current.locale = locale
+      }
       await service.updateGHMirrorHosts(options.mirrors())
       return action(service)
     })
@@ -105,6 +114,29 @@ export const createDraftExtensions = (options: {
       if (!queued && !closed) idle = setTimeout(() => { pending = stop().catch(() => {}) }, 15_000).unref()
     })
     return result
+  }
+  const importScript = async (service: ExtensionSeriveTypes, fileName: string, content: string) => {
+    if (typeof content !== 'string' || Buffer.byteLength(content) > 1024 * 1024 || !content.trim())
+      throw new Error('Source script must be between 1 byte and 1 MiB')
+    const header = /^\/\*[\s\S]+?\*\//.exec(content)?.[0]
+    if (!header) throw new Error('Missing LX script metadata')
+    const metadata: Record<string, string> = {}
+    for (const line of header.split(/\r?\n/)) {
+      const match = /^\s?\*\s?@(name|description|author|homepage|version)\s(.+)$/.exec(line)
+      if (match) metadata[match[1]] = match[2].trim().slice(0, 1024)
+    }
+    const id = createHash('md5').update(content.trim()).digest('hex')
+    const config = await service.getExtensionConfigValues('lx-api-source-loader', ['importedScriptSources'])
+    const scripts = (config.importedScriptSources ?? []) as Array<{ id: string }>
+    if (scripts.some(script => script.id === id)) throw new Error('Source script already imported')
+    if (scripts.length >= 32) throw new Error('Too many source scripts')
+    const item = { ...metadata, id, name: metadata.name || path.basename(fileName).slice(0, 128),
+      fileName: path.basename(fileName), fileDesc: metadata.description ?? '', allowShowUpdateAlert: false }
+    const directory = path.join(options.directory, EXTENSION.dataDirName, 'lx-api-source-loader', 'storage', 'scripts')
+    await mkdir(directory, { recursive: true })
+    await writeFile(path.join(directory, id), content)
+    await service.updateExtensionSettings('lx-api-source-loader', { importedScriptSources: [...scripts, item] })
+    return item
   }
   return {
     call(name: string, args: unknown[]) {
@@ -133,28 +165,51 @@ export const createDraftExtensions = (options: {
       })
     },
     importScript(fileName: string, content: string) {
+      return run(service => importScript(service, fileName, content))
+    },
+    importRemoteScript(value: unknown) {
       return run(async service => {
-        if (typeof content !== 'string' || Buffer.byteLength(content) > 1024 * 1024 || !content.trim())
-          throw new Error('Source script must be between 1 byte and 1 MiB')
-        const header = /^\/\*[\s\S]+?\*\//.exec(content)?.[0]
-        if (!header) throw new Error('Missing LX script metadata')
-        const metadata: Record<string, string> = {}
-        for (const line of header.split(/\r?\n/)) {
-          const match = /^\s?\*\s?@(name|description|author|homepage|version)\s(.+)$/.exec(line)
-          if (match) metadata[match[1]] = match[2].trim().slice(0, 1024)
-        }
-        const id = createHash('md5').update(content.trim()).digest('hex')
+        if (typeof value !== 'string' || value.length > 8192) throw new Error('Invalid source URL')
+        const url = new URL(value)
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an HTTP(S) source URL without credentials')
+        const response = await request<NeedBodyType>(url.href, { needBody: true, retryNum: 0, signal: AbortSignal.timeout(15_000) })
+        try {
+          if (response.statusCode !== 200) throw new Error(`Source download failed: HTTP ${response.statusCode}`)
+          const chunks: Buffer[] = []
+          let size = 0
+          for await (const chunk of response.body) {
+            size += chunk.length
+            if (size > 1024 * 1024) throw new Error('Source script must be between 1 byte and 1 MiB')
+            chunks.push(Buffer.from(chunk))
+          }
+          const name = path.basename(decodeURIComponent(url.pathname)) || 'remote_source.js'
+          return await importScript(service, name.endsWith('.js') ? name : `${name}.js`, Buffer.concat(chunks).toString('utf8'))
+        } finally { response.body.on('error', () => {}).destroy() }
+      })
+    },
+    exportScripts() {
+      return run(async service => {
         const config = await service.getExtensionConfigValues('lx-api-source-loader', ['importedScriptSources'])
-        const scripts = (config.importedScriptSources ?? []) as Array<{ id: string }>
-        if (scripts.some(script => script.id === id)) throw new Error('Source script already imported')
-        if (scripts.length >= 32) throw new Error('Too many source scripts')
-        const item = { ...metadata, id, name: metadata.name || path.basename(fileName).slice(0, 128),
-          fileName: path.basename(fileName), fileDesc: metadata.description ?? '', allowShowUpdateAlert: false }
-        const directory = path.join(options.directory, EXTENSION.dataDirName, 'lx-api-source-loader', 'storage', 'scripts')
-        await mkdir(directory, { recursive: true })
-        await writeFile(path.join(directory, id), content)
-        await service.updateExtensionSettings('lx-api-source-loader', { importedScriptSources: [...scripts, item] })
-        return item
+        const scripts = (config.importedScriptSources ?? []) as Array<{ id: string; name?: string; fileName?: string }>
+        if (!scripts.length) throw new Error('No source scripts to export')
+        if (scripts.length > 32) throw new Error('Too many source scripts')
+        const storage = await realpath(path.join(options.directory, EXTENSION.dataDirName, 'lx-api-source-loader', 'storage', 'scripts'))
+        const directory = await mkdtemp(path.join(options.directory, EXTENSION.tempDirName, 'export-'))
+        try {
+          const names: string[] = []
+          for (const script of scripts) {
+            if (!/^[a-f0-9]{32}$/.test(script.id)) throw new Error('Invalid script identifier')
+            const file = await realpath(path.join(storage, script.id))
+            if (!file.startsWith(storage + path.sep)) throw new Error('Invalid script path')
+            const content = await readFile(file)
+            if (content.length > 1024 * 1024) throw new Error('Source script is too large')
+            const name = (script.name || script.fileName || 'source').replace(/[\x00-\x1f\\/:*?"<>|]/g, '_').slice(0, 100)
+            const entry = `${names.length + 1}-${name}-${script.id.slice(0, 8)}.js`
+            names.push(entry)
+            await writeFile(path.join(directory, entry), content)
+          }
+          return await pack(directory, names)
+        } finally { await rm(directory, { recursive: true, force: true }) }
       })
     },
     importPackage(content: Buffer) {

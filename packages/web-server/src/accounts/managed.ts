@@ -1,15 +1,3 @@
-import type { IncomingMessage } from 'node:http'
-
-import { verifyIdentity } from './security'
-
-export const managed = Boolean(process.env.ANYLISTEN_USER_ID)
-export const identityFor = (req: IncomingMessage) =>
-  verifyIdentity(
-    req.headers['x-anylisten-identity'],
-    process.env.ANYLISTEN_INTERNAL_SECRET ?? '',
-    process.env.ANYLISTEN_USER_ID ?? ''
-  )
-export const managedRole = () => (process.env.ANYLISTEN_ROLE === 'admin' ? 'admin' : 'user')
 export const sanitizeExtension = (extension: { id?: unknown; name?: unknown; version?: unknown; enabled?: unknown; loaded?: unknown; internal?: unknown; icon?: unknown; i18nMessages?: unknown; contributes?: unknown }) => ({
   id: extension.id,
   name: extension.name,
@@ -134,36 +122,27 @@ const userAllowed = new Set([
   'getResourceList',
   'getExtensionList',
 ])
-export let activeCalls = 0
-export const protectRpc = <T extends object>(rpc: T, context?: { role: 'admin' | 'user'; run: (action: () => Promise<unknown>) => Promise<unknown> }): T => {
-  if (!managed && !context) return rpc
-  const role = () => context?.role ?? managedRole()
+export const protectRpc = <T extends object>(rpc: T, context: { role: 'admin' | 'user'; run: (action: () => Promise<unknown>) => Promise<unknown> }): T => {
   const actions: Record<string, (...args: any[]) => any> = { ...Object.fromEntries([...alwaysDenied, ...adminOnly].map(name => [name, async () => { throw new Error('Forbidden') }])), ...rpc }
   return Object.fromEntries(
     Object.entries(actions).map(([name, fn]) => [
       name,
       async (...args: unknown[]) => {
-        if (alwaysDenied.has(name) || (role() !== 'admin' && (adminOnly.has(name) || !userAllowed.has(name))))
+        if (alwaysDenied.has(name) || (context.role !== 'admin' && !userAllowed.has(name)))
           throw new Error('Forbidden')
-        const call = async () => {
-        activeCalls++
-        try {
-          if (name === 'getExtensionErrorMessage' && role() !== 'admin') return null
-          if (name === 'getNewVersionInfo' && role() !== 'admin') return {}
-          if (name === 'getResourceList' && role() !== 'admin') {
+        return context.run(async () => {
+          if (name === 'getExtensionErrorMessage' && context.role !== 'admin') return null
+          if (name === 'getNewVersionInfo' && context.role !== 'admin') return {}
+          if (name === 'getResourceList' && context.role !== 'admin') {
             const resources = await fn(...args)
             return { ...resources, commands: [], listProvider: [] }
           }
-          if (name === 'getExtensionList' && role() !== 'admin') {
+          if (name === 'getExtensionList' && context.role !== 'admin') {
             const list = (await fn(...args)) as Array<Record<string, unknown>>
             return list.map(sanitizeExtension)
           }
           return await fn(...args)
-        } finally {
-          activeCalls--
-        }
-        }
-        return context ? context.run(call) : call()
+        })
       },
     ])
   ) as T

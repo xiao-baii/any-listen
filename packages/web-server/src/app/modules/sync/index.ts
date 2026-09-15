@@ -1,6 +1,5 @@
 import type { SyncWebDAVOptions } from '@any-listen/app/modules/sync'
 
-import { managed } from '@/accounts/managed'
 import { appEvent, appState } from '@/app/app'
 
 let service: typeof import('@any-listen/app/modules/sync') | undefined
@@ -13,7 +12,6 @@ const init = (immediately?: boolean) => {
   }
 }
 export const initSync = async () => {
-  if (managed) return
   service = await import('@any-listen/app/modules/sync')
   for (const callback of listeners) service.syncWebDAVEvent.on('statusChanged', callback)
   listeners.length = 0
@@ -31,7 +29,6 @@ export const runSyncWebDAV = async (
   getListMergeMode: SyncWebDAVOptions['getListMergeMode'],
   getDislikeMergeMode: SyncWebDAVOptions['getDislikeMergeMode']
 ) => {
-  if (managed) throw new Error('WebDAV is unavailable in online-only mode')
   const { runSyncWebDAV: runSyncWebDAVOriginal } = await import('@any-listen/app/modules/sync')
   return runSyncWebDAVOriginal(
     {
@@ -48,7 +45,6 @@ export const runSyncWebDAV = async (
 }
 
 export const onWebDAVSyncStatusChanged = (callback: (state: AnyListen.IPCSync.SyncState['webdav']) => void | Promise<void>) => {
-  if (managed) return
   if (service) service.syncWebDAVEvent.on('statusChanged', callback)
   else listeners.push(callback)
 }

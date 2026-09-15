@@ -4,35 +4,17 @@ import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { MessageChannel, Worker } from 'node:worker_threads'
 
+import type { ExtensionSeriveTypes } from '@any-listen/app/modules/worker/utils'
 import { DEFAULT_LANG, EXTENSION } from '@any-listen/common/constants'
 import defaultSetting from '@any-listen/common/defaultSetting'
 import { createMessage2Call } from 'message2call'
 
-import { verifyManagedExtensions, type ExtensionHealthService } from './extensionHealth'
+import { verifyManagedExtensions } from './extensionHealth'
 
-type SourceService = ExtensionHealthService & {
-  setExtensionState: (state: {
-    clientType: 'web'
-    locale: AnyListen.Locale
-    'proxy.host': string
-    'proxy.port': string
-    configFilePath: string
-    extensionDir: string
-    dataDir: string
-    tempDir: string
-    preloadScript: string
-    onlineExtensionHost: string
-    gHMirrorHosts: string
-    enableDebug: boolean
-    onlineOnly: boolean
-  }) => Promise<void>
-  loadLocalExtensions: () => Promise<void>
-  clearExtensionLogs: (id: string) => Promise<void>
-  startExtensions: () => Promise<void>
-  resourceAction: (action: string, params: unknown) => Promise<unknown>
-  getResourceList: () => Promise<AnyListen.Extension.ResourceList>
-  getNewVersionInfo: () => Promise<Record<string, string>>
-}
+type SourceService = Pick<ExtensionSeriveTypes,
+  'setExtensionState' | 'loadLocalExtensions' | 'startExtensions' | 'resourceAction' |
+  'getLocalExtensionList' | 'getExtensionConfigValues' | 'getExtensionLastLogs' | 'clearExtensionLogs' |
+  'getResourceList' | 'getNewVersionInfo'>
 
 export type SharedAsset = { url: string; options?: AnyListen.IPCExtension.RequestOptions; cache?: boolean } | { file: string }
 export type SharedResult = { value: unknown; assets: Record<string, SharedAsset> }
@@ -163,6 +145,7 @@ export class SharedExtensions {
           // Only public presentation data may leave the shared host.
           if (event.action === 'resourceUpdated')
             this.onEvent(this.result({ ...event, data: { ...event.data, commands: [], listProvider: [] } }))
+          else if (event.action === 'logOutput') this.onEvent(this.result(event))
         },
         createProxyUrl: (url: string, options?: AnyListen.IPCExtension.RequestOptions, cache?: boolean) =>
           this.asset({ url, options, cache }),
@@ -296,11 +279,13 @@ export class SharedExtensions {
     // Account and playlist initialization stays available when public sources fail.
     if (name === 'getLocalExtensionList' && (!this.host || this.failure || this.violation)) return this.result([])
     if (name === 'getNewVersionInfo') return this.result({})
+    if (name === 'getExtensionLastLogs' && !this.host) return this.result([])
+    if (name === 'clearExtensionLogs' && !this.host) return this.result(undefined)
     if (name === 'getResourceList' && (!this.host || this.failure || this.violation))
       return this.result({ resources: {}, listProvider: [], commands: [] })
     if (!this.host || this.failure || this.violation)
       throw new Error(this.violation ?? this.failure ?? 'No public source is published')
-    if (!['resourceAction', 'getResourceList', 'getLocalExtensionList', 'getNewVersionInfo'].includes(name))
+    if (!['resourceAction', 'getResourceList', 'getLocalExtensionList', 'getNewVersionInfo', 'getExtensionLastLogs', 'clearExtensionLogs'].includes(name))
       throw new Error('Public source operation is forbidden')
     if (this.queued >= 128) throw new Error('Public source queue is full')
     const host = this.host,

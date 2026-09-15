@@ -13,7 +13,6 @@
 //   getLyricInfo as getDownloadLyricInfo,
 // } from './download'
 
-import { managed } from '@/accounts/managed'
 import { getLyricInfo as getOnlineLyric, getMusicUrl as getOnlineMusicUrl, getMusicPicUrl as getOnlinePicUrl } from './online'
 
 export const getMusicUrl = async ({
@@ -26,7 +25,6 @@ export const getMusicUrl = async ({
   quality?: string
 }): Promise<AnyListen.IPCMusic.MusicUrlInfo> => {
   if (musicInfo.isLocal) {
-    if (managed) throw new Error('Local music is unavailable in online-only mode')
     const { getMusicUrl: getLocalMusicUrl } = await import('./local')
     const info = await getLocalMusicUrl({
       musicInfo,
@@ -56,7 +54,6 @@ export const getMusicPic = async ({
   isRefresh?: boolean
 }): Promise<AnyListen.IPCMusic.MusicPicInfo> => {
   if (musicInfo.isLocal) {
-    if (managed) throw new Error('Local music is unavailable in online-only mode')
     const { getMusicPicUrl: getLocalPicUrl } = await import('./local')
     const info = await getLocalPicUrl({
       musicInfo,
@@ -87,7 +84,6 @@ export const getLyricInfo = async ({
   isRefresh?: boolean
 }): Promise<AnyListen.IPCMusic.MusicLyricInfo> => {
   if (musicInfo.isLocal) {
-    if (managed) throw new Error('Local music is unavailable in online-only mode')
     const { getLyricInfo: getLocalLyric } = await import('./local')
     const info = await getLocalLyric({
       musicInfo,

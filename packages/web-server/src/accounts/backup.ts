@@ -1,8 +1,6 @@
-import { sendMusicListAction } from '@any-listen/app/modules/musicList'
-import { workers } from '@any-listen/app/modules/worker'
+import type { sendMusicListAction } from '@any-listen/app/modules/musicList'
+import type { DBSeriveTypes } from '@any-listen/app/modules/worker/utils'
 import type Router from '@koa/router'
-
-import { managed } from './managed'
 
 export const validatePersonalData = (value: unknown, depth = 0): void => {
   if (depth > 40) throw new Error('Data is too deeply nested')
@@ -22,8 +20,7 @@ export const validatePersonalData = (value: unknown, depth = 0): void => {
 }
 
 export const registerAccountBackup = (router: Router<unknown, AnyListen.RequestContext>,
-  database = workers.dbService, sendAction = sendMusicListAction, onlineOnly = managed) => {
-  if (!onlineOnly) return
+  database: DBSeriveTypes, sendAction: typeof sendMusicListAction) => {
   router.get('/account-backup', async (ctx) => {
     ctx.set('Content-Disposition', 'attachment; filename="any-listen-playlists.json"')
     ctx.body = { format: 'any-listen-personal-v1', songlist: await database.getAllListData() }

@@ -1,5 +1,4 @@
 import { validatePersonalData } from '@/accounts/backup'
-import { managed } from '@/accounts/managed'
 
 import { getPlayInfo, getPlayerEvent } from '@/app/modules/player'
 import { broadcast } from '@/modules/ipc/websocket'
@@ -7,16 +6,15 @@ import { broadcast } from '@/modules/ipc/websocket'
 import type { ExposeClientFunctions, ExposeServerFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposePlayer = (service = { getPlayInfo, getPlayerEvent }, onlineOnly = managed) => {
+export const createExposePlayer = (service = { getPlayInfo, getPlayerEvent }, onlineOnly = false) => {
   const { getPlayInfo, getPlayerEvent } = service
-  const managed = onlineOnly
   const playerEvent = getPlayerEvent()
   return {
     async getPlayInfo(event) {
       return getPlayInfo()
     },
     async playerEvent(event, pEvent): Promise<void> {
-      if (managed) validatePersonalData(pEvent)
+      if (onlineOnly) validatePersonalData(pEvent)
       switch (pEvent.action) {
         case 'musicChanged':
           playerEvent.musicChanged(pEvent.data.index, pEvent.data.historyIndex, pEvent.data.lastTrackId)
@@ -58,7 +56,7 @@ export const createExposePlayer = (service = { getPlayInfo, getPlayerEvent }, on
       playerEvent.playerEvent(pEvent)
     },
     async playListAction(event, action) {
-      if (managed) validatePersonalData(action)
+      if (onlineOnly) validatePersonalData(action)
       return playerEvent.playListAction(action)
     },
     async playHistoryListAction(event, action) {

@@ -15,18 +15,16 @@ import {
 } from '@any-listen/app/modules/musicList'
 
 import { validatePersonalData } from '@/accounts/backup'
-import { managed } from '@/accounts/managed'
-import { getListsCover, syncOnlineList } from '@/app/modules/musicList'
+import { getListsCover } from '@/app/modules/musicList'
 import { broadcast } from '@/modules/ipc/websocket'
 
 import type { ExposeClientFunctions, ExposeServerFunctions } from '.'
 
 // 暴露给前端的方法
 export const createExposeList = (service = { getAllUserLists, getListMusics, getListsCover, getMusicExistListIds,
-  checkListExistMusic, sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncOnlineList, sortListMusics }, onlineOnly = managed) => {
+  checkListExistMusic, sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncUserList, sortListMusics }, onlineOnly = false) => {
   const { getAllUserLists, getListMusics, getListsCover, getMusicExistListIds, checkListExistMusic,
-    sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncOnlineList, sortListMusics } = service
-  const managed = onlineOnly
+    sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncUserList, sortListMusics } = service
   return {
     async getAllUserLists(event) {
       return getAllUserLists()
@@ -44,7 +42,7 @@ export const createExposeList = (service = { getAllUserLists, getListMusics, get
       return checkListExistMusic(listId, musicId)
     },
     async listAction(event, action) {
-      if (managed) validatePersonalData(action)
+      if (onlineOnly) validatePersonalData(action)
       return sendMusicListAction(action)
     },
     async getListScrollPosition(event) {
@@ -60,11 +58,6 @@ export const createExposeList = (service = { getAllUserLists, getListMusics, get
       return cancelAddFolderMusics(taskId)
     },
     async syncUserList(event, id) {
-      if (managed) {
-        const list = (await getAllUserLists()).userList.find((list) => list.id === id)
-        if (list?.type !== 'online') throw new Error('Not an online list')
-        return syncOnlineList(list)
-      }
       return syncUserList(id)
     },
     async parseMusicMetadata(event, listId, musicInfo) {

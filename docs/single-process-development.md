@@ -21,7 +21,7 @@
 
 | 责任 | 主要文件或目录 |
 | --- | --- |
-| 入口认证、HTTP/WebSocket 路由、维护状态 | `packages/web-server/src/accounts/gateway.ts`、`lifecycle.ts` |
+| 入口认证、HTTP/WebSocket 路由、维护状态 | `packages/web-server/src/accounts/gateway.ts` |
 | 账号启动合并、失败退避、空闲回收、共享 Worker 所有权 | `packages/web-server/src/accounts/runtime.ts` |
 | 账号服务组合、权限绑定、事件订阅及关闭排空 | `packages/web-server/src/accounts/context.ts` |
 | 个人配置文件实例及同名文件隔离 | `packages/web-server/src/accounts/stores.ts` |
@@ -106,6 +106,15 @@ git diff --check
 
 空账号内存测量记录为 10 账号总 RSS 从 1499.45 MiB 降至 97.21 MiB，详见[测量口径](single-process-memory-results.md)。本次未重复压测。真实脚本、公网持续播放、Linux Node.js 24 容器、生产 HTTPS 及发布峰值仍未验收；源码回归通过不等于这些部署条件通过。
 
+## 分支简化复查（2026-09-16）
+
+- 检查相对 `main` 的多账号入口、共享服务、扩展草稿、发布、前端设置及构建改动。
+- 删除旧账号子进程的 DB/音源 IPC 客户端、进程生命周期和环境变量分支；当前账号上下文继续承担认证、权限、关闭排空及在线资源限制。
+- 删除不再使用的 Worker setter 和单用户资源转发包装；设置页只在父组件过滤分类，扩展按钮保留原有布局并共用操作状态处理。
+- 修复维护查询误限管理员的问题：已登录普通账号可以查询维护是否结束，未登录仍返回 401，全站设置仍限管理员。
+- 六组后端测试共 33 项通过；账号 TypeScript 检查、Web 和桌面构建通过。桌面/手机宽度检查确认中文扩展配置、三个原位按钮及取消后恢复可用。
+- 全量 Svelte 检查仍为既有 171 errors / 21 warnings，修改的设置组件无诊断。未进行生产容器和真实公网脚本持续播放验收。
+
 ## Git 提交与同步 main
 
 本次账号入口、共享服务、前端和测试相互依赖，建议作为一个完整功能提交，附带上述文档及 CI 检查。建议提交标题：`feat: share online multi-user runtime in one process`。后续修复按独立问题提交。
@@ -126,4 +135,4 @@ git merge main
 
 冲突主要集中在共享模块的默认入口与实例入口、Worker API、扩展配置及 RPC 允许列表。合并时逐项检查新模块有无账号可变单例、广播是否绑定账号、在线入口是否重新启动本地/WebDAV 任务，再执行上述测试和 Web/桌面构建。不要用整文件覆盖来解决这些冲突。
 
-推送 `multi-user` 触发检查；创建 `multi-user-v*` 标签或手动执行指定分支的工作流才会生成镜像文件。当前版本使用 `multi-user-v0.1.0`。上线前完成[外部验收](multi-user.md#发布前外部验收)，升级和回退使用配套镜像与账号卷备份。
+推送 `multi-user` 触发检查；创建 `multi-user-v*` 标签或手动执行指定分支的工作流才会生成镜像文件。当前版本使用 `multi-user-v0.1.1`。上线前完成[外部验收](multi-user.md#发布前外部验收)，升级和回退使用配套镜像与账号卷备份。

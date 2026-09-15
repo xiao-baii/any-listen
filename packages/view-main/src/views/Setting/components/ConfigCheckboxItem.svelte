@@ -8,6 +8,8 @@
     item,
     onchange,
     onremove,
+    oncommand = executeCommand,
+    commandsDisabled = false,
   }: {
     item: AnyListen.Extension.FormConfigValue<
       AnyListen.Extension.FormConfigCheckbox | AnyListen.Extension.FormConfigCheckboxMultiple
@@ -15,6 +17,8 @@
     multiple?: boolean
     onchange: (value: string, checked: boolean) => void
     onremove: (value: string) => Promise<void>
+    oncommand?: (command: string) => Promise<unknown>
+    commandsDisabled?: boolean
   } = $props()
   // let id = $derived(`${name}_${desc}_${f}`)
   // console.log(item)
@@ -67,8 +71,9 @@
         {#each item.actionCommands as cmd, idx}
           <Btn
             min
+            disabled={commandsDisabled}
             onclick={async () => {
-              await executeCommand(cmd)
+              await oncommand(cmd)
             }}>{item.actionCommandNames?.[idx] ?? cmd}</Btn
           >
         {/each}

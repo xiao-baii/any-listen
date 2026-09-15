@@ -119,6 +119,7 @@ export const createAccountContext = async (options: {
   const draft = options.role === 'admin' ? createDraftExtensions({
     entry: options.workerEntry!, directory: path.join(state.dataPath, 'extension'),
     origins: options.allowedOrigins ?? [], mirrors: () => site.ghMirrorHosts,
+    locale: () => state.appSetting['common.langId'] ?? DEFAULT_LANG,
     icon: file => {
       const name = randomUUID() + path.extname(file)
       files.set(name, file)
@@ -211,7 +212,11 @@ export const createAccountContext = async (options: {
       ...createExposeSoundEffect(stores.get), ...createExposeResource(resources),
       ...createExposeMusic({ ...music, getMusicPic: music.getMusicPicUrl }, workers, state),
       ...createExposeList({ ...lists, getListsCover: ids => lists.getListsCover(ids, music.getMusicPicUrl),
-        syncOnlineList: sync.syncList, sortListMusics: async () => { throw new Error('Local list sorting is unavailable') } }, true),
+        syncUserList: async id => {
+          const list = (await lists.getAllUserLists()).userList.find(list => list.id === id)
+          if (list?.type !== 'online') throw new Error('Not an online list')
+          await sync.syncList(list)
+        }, sortListMusics: async () => { throw new Error('Local list sorting is unavailable') } }, true),
       async inited(socket: ServerSocket) { socket.isInited = true; socketEvent.new_socket_inited(socket) },
       async getAppInfo() { return { machineId: id, proxyServerHost: `/u/${id}` } },
       async getSetting() { return state.appSetting },
@@ -266,7 +271,8 @@ export const createAccountContext = async (options: {
     if (draft) Object.assign(adminExpose, {
       getExtensionList: () => draft.call('getLocalExtensionList', []),
       restartExtensionHost: () => draft.call('getLocalExtensionList', []),
-      getExtensionLastLogs: async () => [], clearExtensionLogs: async () => {},
+      getExtensionLastLogs: (_socket: ServerSocket, id?: string) => sourceCall('getExtensionLastLogs', [id]),
+      clearExtensionLogs: (_socket: ServerSocket, id?: string) => sourceCall('clearExtensionLogs', [id]),
     })
     subscriptions.push(connectRenderer(socketEvent, protectRpc({ ...expose, ...adminExpose }, { role: options.role ?? 'user', run })))
     const app = new Koa()
@@ -277,7 +283,7 @@ export const createAccountContext = async (options: {
       await run(next)
     })
     const router = new Router<unknown, AnyListen.RequestContext>({ prefix: API_PREFIX })
-    registerAccountBackup(router, database, lists.sendMusicListAction, true)
+    registerAccountBackup(router, database, lists.sendMusicListAction)
     const headers = (ctx: Koa.Context) => {
       const result = { ...ctx.headers }
       for (const key of Object.keys(result)) if (key.startsWith('x-anylisten-') || ['authorization', 'cookie'].includes(key)) delete result[key]
@@ -317,11 +323,14 @@ export const createAccountContext = async (options: {
       get busy() { return pending.size + sourceCalls + Number(sync.isSyncing()) + proxy.state.activeWriteStreams.size },
       updateSite(value: SiteSettings) { site = value; settings() },
       importScript: draft ? (fileName: string, content: string) => run(() => draft.importScript(fileName, content)) : undefined,
+      importRemoteScript: draft ? (url: unknown) => run(() => draft.importRemoteScript(url)) : undefined,
+      exportScripts: draft ? () => run(() => draft.exportScripts()) : undefined,
       importPackage: draft ? (content: Buffer) => run(() => draft.importPackage(content)) : undefined,
       draftStatus: () => draft?.status() ?? { workers: 0, queued: 0 },
       async sourceEvent(result: SharedResult) {
         if (closed) return
         const event = await materialize(result) as AnyListen.IPCExtension.EventExtension
+        if (event.action === 'logOutput' && options.role !== 'admin') return
         if (event.action === 'resourceUpdated') resourceState.resources = event.data.resources
         if (closed) return
         broadcast(socket => { void socket.remoteQueueExtension.extensionEvent(event).catch(() => {}) })

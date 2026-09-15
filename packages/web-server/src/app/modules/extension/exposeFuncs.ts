@@ -4,7 +4,6 @@ import { checkProxyCache, createProxy, writeProxyCache } from '@any-listen/app/m
 import type { Options } from '@any-listen/nodejs/request'
 import { createProxyCallback } from 'message2call'
 
-import { managed, managedRole } from '@/accounts/managed'
 import { extensionEvent } from '@/app/modules/extension'
 
 import { createExtensionIconPublicPath, removeExtensionIconPublicPath } from '../fileSystem'
@@ -59,13 +58,11 @@ export const exposedFuncs: AnyListen.IPCExtension.MainIPCActions = {
   },
 
   async showMessageBox(key, extId, options) {
-    if (managed && managedRole() !== 'admin') return -1
     return boxTools.showBox(key, extId, options.modal === true, async (socket) => {
       return socket.remote.showMessageBox(key, extId, options)
     })
   },
   async showInputBox(key, extId, options, _validateInput) {
-    if (managed && managedRole() !== 'admin') throw new Error('Extension interaction requires administrator')
     const validateInput = _validateInput ? createProxyCallback(_validateInput) : undefined
     return boxTools
       .showBox(key, extId, true, async (socket) => {
@@ -76,13 +73,11 @@ export const exposedFuncs: AnyListen.IPCExtension.MainIPCActions = {
       })
   },
   async showOpenBox(key, extId, options) {
-    if (managed && managedRole() !== 'admin') throw new Error('Extension interaction requires administrator')
     return boxTools.showBox(key, extId, true, async (socket) => {
       return socket.remote.showOpenBox(key, extId, options)
     })
   },
   async showSaveBox(key, extId, options) {
-    if (managed && managedRole() !== 'admin') throw new Error('Extension interaction requires administrator')
     return boxTools.showBox(key, extId, true, async (socket) => {
       return socket.remote.showSaveBox(key, extId, options)
     })

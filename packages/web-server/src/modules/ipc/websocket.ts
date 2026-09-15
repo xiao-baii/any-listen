@@ -1,6 +1,5 @@
 import { IPC_CLOSE_CODE } from '@any-listen/common/constants'
 
-import { managed } from '@/accounts/managed'
 import { removeClientInfo } from '@/shared/data'
 import { appLog } from '@/shared/log4js'
 
@@ -17,4 +16,4 @@ export const {
   getSockets,
   destroySockets,
   close: closeSockets,
-} = createSocketService(socketEvent, authConnect, removeClientInfo, appLog, managed ? 1012 : IPC_CLOSE_CODE.normal)
+} = createSocketService(socketEvent, authConnect, removeClientInfo, appLog, IPC_CLOSE_CODE.normal)

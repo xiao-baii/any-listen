@@ -38,7 +38,8 @@
             default:
               break
           }
-          if (account.enabled && (ss.type === 'configCheckbox' || ss.type === 'configCheckboxMultiple')) {
+          if (account.enabled && (ss.type === 'configCheckbox' || ss.type === 'configCheckboxMultiple') &&
+            !(account.user?.role === 'admin' && extension.id === 'lx-api-source-loader')) {
             ss.actionCommands = []
             ss.actionCommandNames = []
           }
@@ -50,10 +51,14 @@
   const activeExt = $derived(Object.values(settings).find((e) => e.id == $query.id) ?? settings[0])
 
   onMount(() => {
-    // TODO reload setting when list updated
-    void getAllExtensionSettings().then((settings) => {
-      extSettings = settings
-    })
+    let active = true
+    const reload = () => {
+      void getAllExtensionSettings().then((settings) => {
+        if (active) extSettings = settings
+      })
+    }
+    reload()
+    const unsubList = extensionEvent.on('listChanged', reload)
 
     const unsub = extensionEvent.on('extenstionSettingUpdated', (setting) => {
       const targetExt = extSettings.find((e) => e.id == setting.id)
@@ -89,6 +94,8 @@
     })
 
     return () => {
+      active = false
+      unsubList()
       unsub()
     }
   })

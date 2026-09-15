@@ -28,13 +28,11 @@ let musicList: ReturnType<typeof createMusicList>
 export const initMusicList = async (
   dbService: DBSeriveTypes,
   getScrollInfo: () => Promise<AnyListen.List.ListPositionInfo>,
-  saveScrollInfo: (info: AnyListen.List.ListPositionInfo) => Promise<void>,
-  validateAction?: (action: AnyListen.IPCList.ActionList) => void,
-  options: { onlineOnly?: boolean } = {}
+  saveScrollInfo: (info: AnyListen.List.ListPositionInfo) => Promise<void>
 ) => {
   initMusicListEvent(dbService)
-  musicList = createMusicList(dbService, getScrollInfo, saveScrollInfo, validateAction, musicListEvent as unknown as Event)
-  if (!options.onlineOnly) await initLocalListProvider()
+  musicList = createMusicList(dbService, getScrollInfo, saveScrollInfo, undefined, musicListEvent as unknown as Event)
+  await initLocalListProvider()
 }
 export const getAllUserLists = () => musicList.getAllUserLists()
 export const getListMusics = (id: string) => musicList.getListMusics(id)
@@ -50,10 +48,6 @@ export const updateMusicBaseInfo = (...args: Parameters<typeof musicList.updateM
   musicList.updateMusicBaseInfo(...args)
 export const onMusicListAction = (callback: (action: AnyListen.IPCList.ActionList) => Promise<void>) =>
   musicListEvent.on('listAction', callback)
-export const closeMusicList = async () => {
-  stopSyncUserListTask()
-  await musicList?.close()
-}
 
 const updateMusicPosition = async (listId: string, ids: string[]) => {
   const musicInfos = await workers.dbService.getListMusics(listId)
@@ -122,7 +116,7 @@ export const syncUserList = async (id: string) => {
 }
 
 let syncTaskTimer: ReturnType<typeof setTimeout> | undefined
-export const stopSyncUserListTask = () => {
+const stopSyncUserListTask = () => {
   clearTimeout(syncTaskTimer)
   syncTaskTimer = undefined
 }

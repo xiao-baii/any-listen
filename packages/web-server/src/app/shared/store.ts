@@ -5,10 +5,6 @@ import { appState } from '@/app/app'
 import { log } from '@/app/shared/log'
 
 let stores: ReturnType<typeof createAccountStores> | undefined
-export const closeStores = () => {
-  stores?.close()
-  stores = undefined
-}
 
 /**
  * 获取 Store 对象

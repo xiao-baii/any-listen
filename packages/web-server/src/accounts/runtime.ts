@@ -58,7 +58,7 @@ export class Runtimes {
     this.sources.onEvent = (data) => {
       for (const runtime of this.entries.values()) {
         if (runtime.stopping) continue
-        if (runtime.context) void runtime.context.sourceEvent(data).catch(() => {})
+        void runtime.context.sourceEvent(data).catch(() => {})
       }
     }
   }
@@ -77,7 +77,7 @@ export class Runtimes {
     this.ghMirrorHosts = settings.ghMirrorHosts
     for (const runtime of this.entries.values()) {
       if (runtime.stopping) continue
-      if (runtime.context) runtime.context.updateSite(settings)
+      runtime.context.updateSite(settings)
     }
   }
   async get(user: User, maintenance = false): Promise<Runtime> {
@@ -160,11 +160,8 @@ export class Runtimes {
     const runtime = this.entries.get(id) ?? (await this.starting.get(id)?.catch(() => undefined))
     if (!runtime) return
     runtime.stopping = true
-    if (runtime.context) {
-      try { await runtime.context.close() }
-      finally { if (this.entries.get(id) === runtime) this.entries.delete(id) }
-      return
-    }
+    try { await runtime.context.close() }
+    finally { if (this.entries.get(id) === runtime) this.entries.delete(id) }
   }
 
   async reap() {
@@ -193,7 +190,7 @@ export class Runtimes {
       gatewayRss: process.memoryUsage().rss,
       database: this.database?.status() ?? { workers: 0, channels: 0 },
       sources: this.sources.status(),
-      draftWorkers: [...this.entries.values()].reduce((sum, runtime) => sum + (runtime.context?.draftStatus().workers ?? 0), 0),
+      draftWorkers: [...this.entries.values()].reduce((sum, runtime) => sum + runtime.context.draftStatus().workers, 0),
       active: [...this.entries.values()].map((r) => ({
         userId: r.user.id,
         active: r.active,

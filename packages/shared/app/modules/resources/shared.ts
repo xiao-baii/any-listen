@@ -5,12 +5,6 @@ let extensionSerive: ExtensionSeriveTypes
 let unsubscribe: (() => void) | undefined
 export type ResourceServices = { readonly extensionSerive: ExtensionSeriveTypes }
 
-export const closeService = () => {
-  unsubscribe?.()
-  unsubscribe = undefined
-  resourceState.resources = {}
-}
-
 export const initService = async (_extensionSerive: ExtensionSeriveTypes) => {
   unsubscribe?.()
   extensionSerive = _extensionSerive

@@ -395,6 +395,10 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
       users.push({ user, cookie: response.headers.get('set-cookie')!.split(';')[0] })
     }
     const [admin, alice, bob] = users
+    assert.equal((await api('/account-api/maintenance')).status, 401)
+    const maintenance = await api('/account-api/maintenance', alice.cookie)
+    assert.equal(maintenance.status, 200)
+    assert.deepEqual(await maintenance.json(), { running: false })
     const deniedAdmin = await api('/account-api/users', admin.cookie, 'POST', { username: 'extra-admin', password, role: 'admin' })
     assert.equal(deniedAdmin.status, 403)
     assert.equal(accounts.find('extra-admin'), undefined)
@@ -435,6 +439,7 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
           hotKeyConfigUpdated: () => {},
           dislikeAction: () => {},
           settingChanged: () => {},
+          extensionEvent: (event: unknown) => { events.push(event) },
         },
         timeout: 5000,
         sendMessage: (data: unknown) => ws.send(JSON.stringify(data)),
@@ -500,12 +505,23 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     const aRpc = await rpc(alice, aEvents),
       a2Rpc = await rpc(alice, a2Events),
       bRpc = await rpc(bob, bEvents)
-    const adminRpc = await rpc(admin, [])
+    const adminEvents: any[] = []
+    const adminRpc = await rpc(admin, adminEvents)
+    const logEvent = { value: { action: 'logOutput', data: { id: 'lx-api-source-loader', name: 'Loader',
+      type: 'info', timestamp: Date.now(), message: 'Administrator source log' } }, assets: {} }
+    await (await runtimes.get(admin.user)).context.sourceEvent(logEvent)
+    await (await runtimes.get(alice.user)).context.sourceEvent(logEvent)
+    for (let attempt = 0; attempt < 50 && !adminEvents.some(event => event.action === 'logOutput'); attempt++) await delay(20)
+    assert(adminEvents.some(event => event.action === 'logOutput'))
+    assert(!aEvents.some((event: any) => event.action === 'logOutput'), 'Source logs are not broadcast to ordinary accounts')
     assert.equal((await runtimes.get(admin.user)).child, undefined)
     assert.equal(runtimes.status().topology, 'single-process-shared-workers')
     assert.equal(new Set(runtimes.status().active.map(runtime => runtime.process)).size, 1)
     assert.equal((await api('/account-api/source-script', alice.cookie, 'POST', {})).status, 403)
     assert.equal((await api('/account-api/source-package', alice.cookie, 'POST', {})).status, 403)
+    assert.equal((await api('/account-api/source-remote', alice.cookie, 'POST', {})).status, 403)
+    assert.equal((await api('/account-api/source-scripts', alice.cookie)).status, 403)
+    assert.equal((await api('/account-api/source-scripts', '')).status, 401)
     for (const client of [adminRpc, aRpc, bRpc]) {
       await client.remote.setSetting({ 'sync.webdav.enable': true })
       assert.equal((await client.remote.getSetting())['sync.webdav.enable'], false)

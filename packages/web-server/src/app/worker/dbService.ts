@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { startDBServiceWorker as _startDBServiceWorker, setDBService, workers } from '@any-listen/app/modules/worker'
+import { startDBServiceWorker as _startDBServiceWorker, workers } from '@any-listen/app/modules/worker'
 import { DB_NAME } from '@any-listen/common/constants'
 import { getNativeName } from '@any-listen/nodejs'
 
@@ -25,11 +25,6 @@ const initServices = async (dataPath: string) => {
 }
 
 export const startDBServiceWorker = async (dataPath: string) => {
-  if (process.env.ANYLISTEN_SHARED_DATABASE === 'true') {
-    const { connectAccountDatabase } = await import('@/accounts/databaseClient')
-    setDBService(await connectAccountDatabase(appState.machineId))
-    return
-  }
   return new Promise<void>((resolve, reject) => {
     void _startDBServiceWorker(() => {
       initServices(dataPath).then(resolve).catch(reject)

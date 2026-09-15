@@ -2,7 +2,6 @@
 import { API_PREFIX } from '@any-listen/common/constants'
 import Router from '@koa/router'
 
-import { registerAccountBackup } from '@/accounts/backup'
 
 import { registerIpcRouter } from './ipc'
 import { registerProxyRouter } from './proxyServer'
@@ -15,6 +14,5 @@ router.prefix(API_PREFIX)
 
 registerIpcRouter(router)
 registerProxyRouter(router)
-registerAccountBackup(router)
 
 export default router

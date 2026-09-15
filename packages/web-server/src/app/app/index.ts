@@ -70,7 +70,7 @@ const listenerAppEvent = () => {
   })
   appEvent.on('inited', () => {
     handleProxyChange()
-    if (process.env.NODE_ENV === 'production' && !process.env.ANYLISTEN_USER_ID) void startCheckUpdateTimeout()
+    if (process.env.NODE_ENV === 'production') void startCheckUpdateTimeout()
   })
   appEvent.on('proxy_changed', (host, port) => {
     setProxyByHost(host, port)

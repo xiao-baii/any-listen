@@ -1,6 +1,5 @@
 import { createMessage2Call } from 'message2call'
 
-import { protectRpc } from '@/accounts/managed'
 import { socketEvent } from '@/modules/ipc/event'
 import type { ServerSocketWinMain } from '@/modules/ipc/websocket'
 import { appLog } from '@/shared/log4js'
@@ -66,7 +65,7 @@ export const init = () => {
     ...createExposeSync(),
   }
 
-  connectRenderer(socketEvent, protectRpc(exposeObj))
+  connectRenderer(socketEvent, exposeObj)
 }
 
 export const connectRenderer = (events: typeof socketEvent, exposeObj: Record<string, (...args: any[]) => any>) => {

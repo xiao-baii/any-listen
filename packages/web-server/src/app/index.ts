@@ -14,7 +14,6 @@ export const initApp = async () => {
   await initAppEnv()
   initI18n()
   await startCommonWorkers(appState.dataPath)
-  if (process.env.ANYLISTEN_USER_ID) await import('./worker').then(({ workers }) => workers.dbService.musicUrlClear())
   await startExtensionServiceWorker()
   await initModules()
   await initRenderers()

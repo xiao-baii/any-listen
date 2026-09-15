@@ -219,13 +219,13 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         json(res, 200, { ok: true })
         return
       }
+      if (url.pathname === '/account-api/maintenance' && req.method === 'GET') {
+        json(res, 200, { running: publications.status().running })
+        return
+      }
       if (auth.user.role !== 'admin') fail(403, 'Administrator required')
       if (url.pathname === '/account-api/settings' && req.method === 'GET') {
         json(res, 200, siteSettings())
-        return
-      }
-      if (url.pathname === '/account-api/maintenance' && req.method === 'GET') {
-        json(res, 200, { running: publications.status().running })
         return
       }
       if (url.pathname === '/account-api/settings' && req.method === 'POST') {
@@ -294,15 +294,31 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         json(res, 200, publications.status())
         return
       }
-      if (['/account-api/source-script', '/account-api/source-package'].includes(url.pathname) && req.method === 'POST') {
+      if (url.pathname === '/account-api/source-scripts' && req.method === 'GET') {
+        if (publications.status().running) fail(409, 'Publication in progress')
+        const runtime = await runtimes.get(auth.user)
+        authorize()
+        if (publications.status().running) fail(409, 'Publication in progress')
+        const archive = await runtime.context.exportScripts!().catch((error: Error) => fail(400, error.message))
+        authorize()
+        res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': 'attachment; filename="lx-sources.tar.gz"', 'Cache-Control': 'no-store' })
+        res.end(archive)
+        return
+      }
+      if (['/account-api/source-script', '/account-api/source-package', '/account-api/source-remote'].includes(url.pathname) && req.method === 'POST') {
         if (publications.status().running) fail(409, 'Publication in progress')
         const isPackage = url.pathname === '/account-api/source-package'
-        const content = await readBody(req, (isPackage ? 16 : 1) * 1024 * 1024)
+        const isRemote = url.pathname === '/account-api/source-remote'
+        const remote = isRemote ? await readJson(req) : undefined
+        const content = isRemote ? Buffer.alloc(0) : await readBody(req, (isPackage ? 16 : 1) * 1024 * 1024)
         authorize()
         const runtime = await runtimes.get(auth.user)
         authorize()
         if (publications.status().running) fail(409, 'Publication in progress')
-        const result = await (isPackage ? runtime.context!.importPackage!(content) : runtime.context!.importScript!('source.js', content.toString('utf8')))
+        const fileName = url.searchParams.get('name') || 'source.js'
+        if (fileName.length > 255) fail(400, 'Source filename is too long')
+        const result = await (isRemote ? runtime.context.importRemoteScript!(remote!.url)
+          : isPackage ? runtime.context.importPackage!(content) : runtime.context.importScript!(fileName, content.toString('utf8')))
           .catch((error: Error) => fail(400, error.message))
         json(res, 201, result)
         return
