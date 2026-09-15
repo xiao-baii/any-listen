@@ -2,11 +2,30 @@
   import Btn from '@/components/base/Btn.svelte'
   import { i18n, t } from '@/plugins/i18n'
   import { showOpenDialog } from '@/shared/ipc/app'
-  import { downloadAndParseExtension, installExtension, updateExtension } from '@/modules/extension/store/actions'
+  import { downloadAndParseExtension, getExtensionList, installExtension, setList, updateExtension } from '@/modules/extension/store/actions'
   import { EXTENSION } from '@any-listen/common/constants'
   import { showNotify } from '@/components/apis/notify'
   import { extensionState } from '@/modules/extension/store/state'
   import { account } from '@/accounts/state.svelte'
+  import { uploadSource } from '@/accounts/sources'
+
+  let packageInput = $state<HTMLInputElement>()
+  let uploading = $state(false)
+  const handleUpload = async (input: HTMLInputElement) => {
+    const file = input.files?.[0]
+    if (!file) return
+    uploading = true
+    try {
+      const result = await uploadSource('package', file)
+      setList(await getExtensionList())
+      showNotify(`已安装：${result.name}`)
+    } catch (error) {
+      showNotify((error as Error).message)
+    } finally {
+      uploading = false
+      input.value = ''
+    }
+  }
 
   const handleInstallLocal = async () => {
     const { canceled, filePaths } = await showOpenDialog({
@@ -47,9 +66,16 @@
   }
 </script>
 
-<div class="header-actions">
-  {#if account.enabled}<a href="/accounts">音源发布</a>{:else}<Btn onclick={handleInstallLocal} min>{$t('extension.header.actions.install_local')}</Btn>{/if}
-</div>
+{#if !account.enabled || account.user?.role === 'admin'}
+  <div class="header-actions">
+    {#if account.enabled}
+      <input bind:this={packageInput} type="file" accept=".alix" aria-label="音源扩展包" hidden disabled={uploading} onchange={(e) => handleUpload(e.currentTarget)} />
+      <Btn onclick={() => packageInput?.click()} loading={uploading} min>{$t('extension.header.actions.install_local')}</Btn>
+    {:else}
+      <Btn onclick={handleInstallLocal} min>{$t('extension.header.actions.install_local')}</Btn>
+    {/if}
+  </div>
+{/if}
 
 <style lang="less">
   .header-actions {

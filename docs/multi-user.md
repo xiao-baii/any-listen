@@ -106,7 +106,7 @@ location / {
 - `online-metadata`：搜索、封面、歌词等。
 - `lx-api-source-loader`：导入管理员提供的 LX 脚本，再勾选启用。仅安装加载器不等于有可用音源。
 
-在账号页面“音源发布”上传受管 ALIX 扩展包（最多 16 MiB）和 LX 脚本（最多 1 MiB）；也可从扩展市场安装受管扩展。再进入播放器的扩展设置勾选已导入脚本，返回账号页面发布。原脚本扩展命令入口在新模式隐藏。
+在扩展商店安装或升级受管扩展，也可通过扩展管理右上角的“本地安装”上传 ALIX 包（最多 16 MiB，仅管理员可用）。进入播放器的扩展设置，选择 LX API Source Loader，通过“导入脚本”上传 LX 脚本（最多 1 MiB），导入后勾选启用。最后返回账号页面点击“发布配置”。扩展管理页不提供“音源发布”快捷入口；发布操作只在账号页面。脚本导入使用文件草稿接口，原脚本执行命令仍不开放。
 管理员修改的是文件草稿，编辑时不运行扩展或 LX 脚本；所有播放器（含管理员）均使用正式发布版本。私人登录、个人歌单或播放器能力的脚本不支持。
 点击“发布配置”后，关闭草稿编辑器，快照两个扩展及脚本，停止旧公共音源，在同一执行槽验证候选，然后重建活跃账号上下文。全程只有一个音源脚本执行宿主。
 配置引用、重复脚本 ID、缺失脚本、未启用脚本、加载失败都拒绝发布。LX 初始化通过当前加载器的成功日志标记验证，升级加载器后须重跑验收。
@@ -131,7 +131,7 @@ location / {
 
 代码导航、测试命令、验证结果及同步 main 的注意事项统一见 [开发指南](single-process-development.md)。本机预览命令和测试账号也见该文档，不用于生产。
 
-`main` 用于同步上游，功能改动在 `multi-user` 分支维护。推送该分支会触发 Multi User 检查；检查通过不自动生成镜像。自定义工作流在 `xiao-baii/any-listen` 的 `multi-user-v*` 标签或手动运行 `multi-user` 分支通过检查后，导出 Linux AMD64 Docker TAR 至 Actions Artifacts，保留 30 天，不推送 GHCR。镜像标签为 `any-listen:<标签或分支>` 和 `any-listen:sha-<完整提交>`。
+`main` 用于同步上游，功能改动在 `multi-user` 分支维护。推送该分支会触发 Multi User 检查；检查通过不自动生成镜像。当前发布标签为 `0.1.0`。自定义工作流在 `xiao-baii/any-listen` 的 `0.1.0`、`multi-user-v*` 标签或手动运行 `multi-user` 分支通过检查后，导出 Linux AMD64 Docker TAR 至 Actions Artifacts，保留 30 天，不推送 GHCR。镜像标签为 `any-listen:<标签或分支>` 和 `any-listen:sha-<完整提交>`。
 
 上游 release 工作流限于原仓库执行。1Panel 文件导入使用 `compose.image.yml`，详见 [镜像导入说明](image-import.md)；本文的 `compose.multi-user.yml` 用于源码本地构建。
 

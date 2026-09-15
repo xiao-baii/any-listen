@@ -15,8 +15,6 @@
   let publication = $state<{ version: string | null; running: boolean; message: string }>({ version: null, running: false, message: '' })
   let resetId = $state('')
   let backupFile = $state<File | null>(null)
-  let sourceFile = $state<File | null>(null)
-  let extensionFile = $state<File | null>(null)
   let replaceLists = $state(false)
   let proxyAllResources = $state(false)
   let onlineResourceEnabled = $state(false)
@@ -123,28 +121,6 @@
           {#each runtimes.errors as item}<p class="error">{users.find((user) => user.id === item.userId)?.username}: {item.message} <Btn disabled={busy} onclick={() => run(async () => { await accountRequest(`/users/${item.userId}/retry`, 'POST'); await refresh() })}>重试启动</Btn></p>{/each}
         </section>
         <section><h2>音源发布</h2>
-          <form onsubmit={(e) => { e.preventDefault(); void run(async () => {
-            if (!extensionFile) return
-            if (extensionFile.size > 16 * 1024 * 1024) throw new Error('扩展包不能超过 16 MiB。')
-            const response = await fetch('/account-api/source-package', { method: 'POST', body: extensionFile })
-            const result = await response.json()
-            if (!response.ok) throw new Error(result.error ?? '扩展安装失败。')
-            message = `已安装：${result.name}`
-          }) }}>
-            <label>音源扩展包<input type="file" accept=".alix" disabled={busy || publication.running} onchange={(e) => { extensionFile = e.currentTarget.files?.[0] ?? null }} /></label>
-            <Btn rawtype="submit" disabled={busy || publication.running || !extensionFile}>安装扩展</Btn>
-          </form>
-          <form onsubmit={(e) => { e.preventDefault(); void run(async () => {
-            if (!sourceFile) return
-            if (sourceFile.size > 1024 * 1024) throw new Error('脚本不能超过 1 MiB。')
-            const response = await fetch('/account-api/source-script', { method: 'POST', headers: { 'Content-Type': 'text/javascript' }, body: sourceFile })
-            const result = await response.json()
-            if (!response.ok) throw new Error(result.error ?? '脚本导入失败。')
-            message = `已导入：${result.name}`
-          }) }}>
-            <label>LX 音源脚本<input type="file" accept=".js" disabled={busy || publication.running} onchange={(e) => { sourceFile = e.currentTarget.files?.[0] ?? null }} /></label>
-            <Btn rawtype="submit" disabled={busy || publication.running || !sourceFile}>导入脚本</Btn>
-          </form>
           <p>当前版本：{publication.version ?? '尚未发布'}</p><p role="status">{publication.message}</p><Btn disabled={busy || publication.running} onclick={publish}>{publication.running ? '正在发布…' : '发布配置'}</Btn></section>
       {/if}
   {/if}
@@ -158,7 +134,6 @@
   .login { max-width: 400px; margin: 40px auto; } form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; } .login form { flex-direction: column; align-items: stretch; }
   label { display: flex; flex-direction: column; gap: 8px; max-width: 100%; } select { height: 30px; border: 1px solid #bbb; background: white; }
   label.check { flex-direction: row; align-items: center; } input[type='file'] { max-width: 100%; }
-  section > form + form { margin-top: 16px; }
   label.mirror-hosts { flex-basis: 100%; width: 100%; } .mirror-hosts textarea { box-sizing: border-box; width: 100%; min-height: 110px; resize: vertical; font: 13px monospace; padding: 8px; border: 1px solid #bbb; border-radius: 4px; }
   .error { color: #ab2732; } .table-wrap { overflow-x: auto; margin-top: 16px; } table { width: 100%; border-collapse: collapse; table-layout: fixed; } th,td { padding: 12px 8px; text-align: left; border-bottom: 1px solid #eee; overflow-wrap: anywhere; } .commands { display: flex; flex-wrap: wrap; gap: 8px; }
   @media (max-width: 600px) { .account-page { padding: 18px 14px; } form { flex-direction: column; align-items: stretch; } th,td { padding: 10px 3px; font-size: 12px; } .commands { flex-direction: column; } }

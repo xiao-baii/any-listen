@@ -107,7 +107,7 @@
     />
   {/if}
   {#if activeExt}
-    <SettingView id={activeExt.id} name={activeExt.name} list={activeExt.settings} />
+    <SettingView id={activeExt.id} name={activeExt.name} list={activeExt.settings} onimport={async () => { extSettings = await getAllExtensionSettings() }} />
   {/if}
 </div>
 

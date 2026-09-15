@@ -34,7 +34,8 @@
 | 歌单、播放器、不喜欢列表、资源实例 | `packages/shared/app/modules/{musicList,player,dislikeList,resources}/service.ts` |
 | 在线歌单同步、账号代理流及取消 | `packages/shared/app/modules/musicList/onlineSync.ts`、`proxyServer/` |
 | 账号连接集合、广播、心跳、会话撤销 | `packages/web-server/src/modules/ipc/socketService.ts` |
-| 账号管理、音源上传及共享进程状态 | `packages/view-main/src/accounts/AccountPage.svelte` |
+| 账号管理、音源发布及共享进程状态 | `packages/view-main/src/accounts/AccountPage.svelte` |
+| 扩展包本地安装、LX 脚本导入 | `packages/view-main/src/views/Extenstion/HeaderActions.svelte`、`views/Setting/ExtensionSetting/SettingView.svelte`，上传接口封装在 `accounts/sources.ts`；同时保留原有商店入口 |
 | 维护关闭后暂停播放并重载 | `packages/web-server/src/preload/ws.ts`、`auth.ts`，`packages/view-main/src/main.ts` |
 
 `accounts/database.ts` 保存账号、会话和发布元数据；共享 DB Worker 服务的是各账号的音乐 SQLite 文件，两者职责不同。
@@ -125,4 +126,4 @@ git merge main
 
 冲突主要集中在共享模块的默认入口与实例入口、Worker API、扩展配置及 RPC 允许列表。合并时逐项检查新模块有无账号可变单例、广播是否绑定账号、在线入口是否重新启动本地/WebDAV 任务，再执行上述测试和 Web/桌面构建。不要用整文件覆盖来解决这些冲突。
 
-推送 `multi-user` 触发检查；创建 `multi-user-v*` 标签或手动执行指定分支的工作流才会生成镜像文件。上线前完成[外部验收](multi-user.md#发布前外部验收)，升级和回退使用配套镜像与账号卷备份。
+推送 `multi-user` 触发检查；创建 `0.1.0`、`multi-user-v*` 标签或手动执行指定分支的工作流才会生成镜像文件。当前版本使用 `0.1.0`，替代原 `multi-user-v0.1.0` 标签。上线前完成[外部验收](multi-user.md#发布前外部验收)，升级和回退使用配套镜像与账号卷备份。
