@@ -10,7 +10,7 @@ async function main() {
   await scriptsRequire('esbuild').build({
     entryPoints: [path.join(__dirname, 'memory.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: output,
     external: ['better-sqlite3', 'ws'], tsconfig: path.join(__dirname, '../tsconfig.json'),
-    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true', 'import.meta.env.VITE_IS_DESKTOP': 'false',
+    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true', 'import.meta.env.VITE_IS_DESKTOP': 'false', 'import.meta.env.VITE_IS_WINDOWS_LEGACY': 'false',
       '__GIT_COMMIT__': '""', '__GIT_COMMIT_DATE__': '""' },
     plugins: process.env.ACCOUNT_BASELINE_ROOT ? [{ name: 'baseline-runtime', setup(build) {
       build.onResolve({ filter: /^\.\.\/src\/accounts\/runtime$/ }, () => ({

@@ -628,6 +628,23 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     })
     assert.equal((await a2Rpc.remote.getListMusics('love')).length, 1)
     assert.equal((await bRpc.remote.getListMusics('love')).length, 0)
+    const replacement = { ...song('Replacement source'), id: 'replacement-song-id' }
+    await aRpc.remote.listAction({
+      action: 'list_music_add',
+      data: { id: 'love', musicInfos: [replacement], addMusicLocationType: 'bottom' },
+    })
+    await aRpc.remote.listAction({
+      action: 'list_music_update_position',
+      data: { listId: 'love', ids: [replacement.id], position: 0 },
+    })
+    assert.deepEqual((await a2Rpc.remote.getListMusics('love')).map((item: any) => item.id), [replacement.id, 'same-song-id'])
+    await aRpc.remote.listAction({
+      action: 'list_music_remove',
+      data: { listId: 'love', ids: ['same-song-id'] },
+    })
+    assert.deepEqual((await a2Rpc.remote.getListMusics('love')).map((item: any) => item.id), [replacement.id])
+    assert.equal((await bRpc.remote.getListMusics('love')).length, 0)
+    assert.equal((await bRpc.remote.getListMusics('default'))[0].name, 'Bob song')
     await aRpc.remote.playListAction({
       action: 'set',
       data: {

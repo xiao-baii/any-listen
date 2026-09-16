@@ -26,7 +26,7 @@ async function main() {
     outfile: path.join(out, 'accounts.test.cjs'),
     external: ['better-sqlite3', 'ws'],
     tsconfig: path.join(__dirname, '../tsconfig.json'),
-    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true', 'import.meta.env.VITE_IS_DESKTOP': 'false', '__GIT_COMMIT__': '""', '__GIT_COMMIT_DATE__': '""' },
+    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true', 'import.meta.env.VITE_IS_DESKTOP': 'false', 'import.meta.env.VITE_IS_WINDOWS_LEGACY': 'false', '__GIT_COMMIT__': '""', '__GIT_COMMIT_DATE__': '""' },
   })
   const result = spawnSync(process.execPath, ['--test', path.join(out, 'accounts.test.cjs')], {
     stdio: 'inherit',
