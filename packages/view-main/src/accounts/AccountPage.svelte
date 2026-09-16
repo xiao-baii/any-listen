@@ -102,7 +102,7 @@
         }) }}>
           <label class="check"><input type="checkbox" bind:checked={proxyAllResources} disabled={busy} />所有资源通过服务器代理</label>
           <label class="check"><input type="checkbox" bind:checked={onlineResourceEnabled} disabled={busy} />启用在线资源</label>
-          <label class="mirror-hosts">GitHub 下载镜像地址<textarea rows="5" bind:value={ghMirrorHosts} disabled={busy} spellcheck={false} /></label>
+          <label class="mirror-hosts">GitHub 下载镜像地址<textarea rows="5" bind:value={ghMirrorHosts} disabled={busy} spellcheck={false}></textarea></label>
           <Btn disabled={busy} onclick={() => { ghMirrorHosts = defaultSetting['extension.ghMirrorHosts'] }}>恢复默认</Btn>
           <Btn rawtype="submit" disabled={busy}>保存</Btn>
         </form></section>
@@ -132,7 +132,7 @@
   h1 { font-size: 24px; margin: 0 auto 0 0; } h2 { font-size: 17px; margin: 0 0 16px; }
   section { padding: 24px 0; border-bottom: 1px solid #ddd; overflow-wrap: anywhere; } section > a { display: inline-block; margin-bottom: 12px; } nav { padding-top: 20px; } a { color: #17674f; }
   .login { max-width: 400px; margin: 40px auto; } form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; } .login form { flex-direction: column; align-items: stretch; }
-  label { display: flex; flex-direction: column; gap: 8px; max-width: 100%; } select { height: 30px; border: 1px solid #bbb; background: white; }
+  label { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
   label.check { flex-direction: row; align-items: center; } input[type='file'] { max-width: 100%; }
   label.mirror-hosts { flex-basis: 100%; width: 100%; } .mirror-hosts textarea { box-sizing: border-box; width: 100%; min-height: 110px; resize: vertical; font: 13px monospace; padding: 8px; border: 1px solid #bbb; border-radius: 4px; }
   .error { color: #ab2732; } .table-wrap { overflow-x: auto; margin-top: 16px; } table { width: 100%; border-collapse: collapse; table-layout: fixed; } th,td { padding: 12px 8px; text-align: left; border-bottom: 1px solid #eee; overflow-wrap: anywhere; } .commands { display: flex; flex-wrap: wrap; gap: 8px; }
