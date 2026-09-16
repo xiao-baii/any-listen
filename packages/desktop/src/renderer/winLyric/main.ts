@@ -88,7 +88,7 @@ const winEvent = () => {
   //   browserWindow.webContents.send('focus')
   // })
 
-  browserWindow.once('ready-to-show', () => {
+  const handlerReadyToShow = () => {
     showWindow()
     if (appState.appSetting['desktopLyric.isLock']) {
       browserWindow!.setIgnoreMouseEvents(true, { forward: !isLinux && appState.appSetting['desktopLyric.isHoverHide'] })
@@ -101,7 +101,20 @@ const winEvent = () => {
       alwaysOnTopTools.startLoop()
     }
     browserWindow?.blur()
-  })
+    if (import.meta.env.VITE_IS_WINDOWS) {
+      if (appState.appSetting['desktopLyric.mode'] === 'classic') {
+        browserWindow!.setResizable(false)
+      }
+    }
+  }
+
+  if (import.meta.env.VITE_IS_LINUX) {
+    if (appState['electronParams.ozonePlatform'] == 'wayland') {
+      browserWindow.webContents.once('did-finish-load', handlerReadyToShow)
+    } else browserWindow.once('ready-to-show', handlerReadyToShow)
+  } else {
+    browserWindow.once('ready-to-show', handlerReadyToShow)
+  }
 }
 
 export const createWindow = () => {
@@ -160,7 +173,7 @@ export const createWindow = () => {
     },
   }
   if (import.meta.env.VITE_IS_WINDOWS) {
-    options.resizable = appState.appSetting['desktopLyric.mode'] === 'multiLine'
+    options.resizable = true
   }
 
   /**

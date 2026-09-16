@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import { DEV_SERVER_PORTS } from '@any-listen/common/constants'
-import { getPlatform } from '@any-listen/nodejs/index'
+import { getPlatform, getOSVersion } from '@any-listen/nodejs/index'
 import { BrowserWindow, Notification, dialog, session } from 'electron'
 
 import { appState } from '@/app'
@@ -54,16 +54,31 @@ const winEvent = () => {
     winMainState.isFullScreen = false
     winMainEvent.fullscreen(false)
 
-    if (browserWindow?.resizable) {
-      browserWindow.setResizable(false)
+    // macOS needs here to set resizable to false after exiting full screen
+    if (import.meta.env.VITE_IS_MAC) {
+      if (browserWindow?.resizable) {
+        browserWindow.setResizable(false)
+      }
     }
   })
 
-  browserWindow.once('ready-to-show', () => {
+  const handlerReadyToShow = () => {
     showWindow()
     setThumbarButtons()
     winMainEvent.ready_to_show()
-  })
+  }
+
+  // The `ready-to-show` event doesn't always fire on wayland.
+  // Use the `did-finish-load` event on the web contents instead as that is similar enough
+  // https://github.com/electron/electron/issues/48859
+  // https://github.com/FreeTubeApp/FreeTube/pull/8294
+  if (import.meta.env.VITE_IS_LINUX) {
+    if (appState['electronParams.ozonePlatform'] == 'wayland') {
+      browserWindow.webContents.once('did-finish-load', handlerReadyToShow)
+    } else browserWindow.once('ready-to-show', handlerReadyToShow)
+  } else {
+    browserWindow.once('ready-to-show', handlerReadyToShow)
+  }
 
   browserWindow.on('show', () => {
     winMainEvent.show()
@@ -137,10 +152,12 @@ export const createWindow = () => {
     ? `http://localhost:${DEV_SERVER_PORTS['view-main']}`
     : `file://${path.join(encodePath(__dirname), '../view-main/index.html')}`
   if (import.meta.env.DEV) {
-    void browserWindow.loadURL(`${winURL}?os=${getPlatform()}&dt=${appState.envParams.cmdParams.dt}`)
+    void browserWindow.loadURL(
+      `${winURL}?os=${getPlatform()}&osver=${encodeURIComponent(getOSVersion())}&dt=${appState.envParams.cmdParams.dt}`
+    )
   } else {
     void browserWindow.loadURL(
-      `${winURL}?os=${getPlatform()}&dt=${appState.envParams.cmdParams.dt}&t=${encodeURIComponent(JSON.stringify(theme.colors))}`
+      `${winURL}?os=${getPlatform()}&osver=${encodeURIComponent(getOSVersion())}&dt=${appState.envParams.cmdParams.dt}&t=${encodeURIComponent(JSON.stringify(theme.colors))}`
     )
   }
 
@@ -246,15 +263,15 @@ export const setFullScreen = (isFullscreen: boolean): boolean => {
   if (!browserWindow) return false
   // https://github.com/any-listen/any-listen/issues/190
   // in electron ^41.2.0, windows -dt mode need to set resizable to true before setting full screen
-  // if (appState.envParams.cmdParams.dt || isLinux) {
-  if (import.meta.env.VITE_IS_LINUX) {
+  if (appState.envParams.cmdParams.dt || import.meta.env.VITE_IS_LINUX) {
     // linux 需要先设置为可调整窗口大小才能全屏
     if (isFullscreen) {
       browserWindow.setResizable(isFullscreen)
       browserWindow.setFullScreen(isFullscreen)
     } else {
       browserWindow.setFullScreen(isFullscreen)
-      browserWindow.setResizable(isFullscreen)
+      // windows/linux need to set resizable to true after exiting full screen
+      if (!import.meta.env.VITE_IS_MAC) browserWindow.setResizable(isFullscreen)
     }
   } else {
     browserWindow.setFullScreen(isFullscreen)
