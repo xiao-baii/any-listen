@@ -56,6 +56,7 @@ export type SiteSettings = { proxyAllResources: boolean; onlineResourceEnabled: 
 export const createAccountContext = async (options: {
   id: string
   directory: string
+  temporaryDirectory: string
   secret: string
   database: DBSeriveTypes
   sources: SharedExtensions
@@ -67,8 +68,8 @@ export const createAccountContext = async (options: {
   const { id, database, sources } = options
   const state = createAppState()
   state.dataPath = path.join(options.directory, 'app')
-  state.cacheDataPath = path.join(options.directory, 'cache')
-  state.tempDataPath = path.join(options.directory, 'temp')
+  state.cacheDataPath = path.join(options.temporaryDirectory, 'cache')
+  state.tempDataPath = path.join(options.temporaryDirectory, 'temp')
   state.version.version = version
   state.machineId = id
   await Promise.all([state.dataPath, state.cacheDataPath, state.tempDataPath].map(dir => mkdir(dir, { recursive: true })))

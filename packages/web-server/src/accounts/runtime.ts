@@ -1,4 +1,6 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdtempSync } from 'node:fs'
+import { mkdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import defaultSetting from '@any-listen/common/defaultSetting'
 import { getNativeName } from '@any-listen/nodejs'
@@ -25,6 +27,7 @@ export interface Runtime {
   startupMs: number
 }
 export class Runtimes {
+  readonly temporaryRoot = mkdtempSync(path.join(tmpdir(), 'any-listen-runtime-'))
   readonly sources: SharedExtensions
   private database: SharedDatabase | undefined
   entries = new Map<string, Runtime>()
@@ -54,7 +57,7 @@ export class Runtimes {
     public idleMs = 300_000
   ) {
     configurePublicNetwork(this.allowedMediaOrigins)
-    this.sources = new SharedExtensions(path.join(path.dirname(entry), 'extension-service.worker.js'), root)
+    this.sources = new SharedExtensions(path.join(path.dirname(entry), 'extension-service.worker.js'), this.temporaryRoot)
     this.sources.onEvent = (data) => {
       for (const runtime of this.entries.values()) {
         if (runtime.stopping) continue
@@ -115,7 +118,6 @@ export class Runtimes {
     const dataPath = path.join(this.root, 'users', user.id)
     await mkdir(dataPath, { recursive: true })
     await mkdir(path.join(dataPath, 'imports'), { recursive: true })
-    await mkdir(path.join(dataPath, 'temp'), { recursive: true })
     const secret = newToken()
     {
       this.database ??= new SharedDatabase(path.join(path.dirname(this.entry), 'accounts-db.worker.js'))
@@ -125,7 +127,8 @@ export class Runtimes {
         path.join(path.dirname(this.entry), '../native', getNativeName(), 'better_sqlite3.node'), user.id)
       try {
         const { createAccountContext } = await import('./context')
-        const context = await createAccountContext({ id: user.id, directory: dataPath, secret,
+        const context = await createAccountContext({ id: user.id, directory: dataPath,
+          temporaryDirectory: path.join(this.temporaryRoot, 'users', user.id), secret,
           database: channel.service as DBSeriveTypes, sources: this.sources, role: user.role,
           workerEntry: path.join(path.dirname(this.entry), 'extension-service.worker.js'), allowedOrigins: this.allowedMediaOrigins,
           site: { proxyAllResources: this.proxyAllResources, onlineResourceEnabled: this.onlineResourceEnabled, ghMirrorHosts: this.ghMirrorHosts } })
@@ -183,6 +186,7 @@ export class Runtimes {
     const failed = results.find((r) => r.status === 'rejected')
     await this.database?.close()
     if (failed?.status === 'rejected') throw failed.reason
+    await rm(this.temporaryRoot, { recursive: true, force: true })
   }
   status() {
     return {

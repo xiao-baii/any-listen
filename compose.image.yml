@@ -10,10 +10,6 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
-      - account-data:/data
+      - ./data:/server/data
     restart: unless-stopped
     stop_grace_period: 30s
-
-volumes:
-  account-data:
-    name: any-listen-data

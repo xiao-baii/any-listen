@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cp, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import type { Accounts, User } from './database'
@@ -227,6 +227,21 @@ export class Publications {
       this.accounts.audit(admin.id, 'extension.publish.failed', version)
       fail(400, this.message)
     } finally {
+      // The host runs a copy in source-runtime; only the committed snapshot is needed for recovery.
+      try {
+        const directory = path.join(this.runtimes.root, 'publications')
+        const current = this.accounts.state('publication')
+        const entries = await readdir(directory, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return []
+          throw error
+        })
+        for (const entry of entries) {
+          if (entry.isDirectory() && entry.name !== current)
+            await rm(path.join(directory, entry.name), { recursive: true, force: true })
+        }
+      } catch (error) {
+        this.message += `. Snapshot cleanup failed: ${(error as Error).message}`
+      }
       this.running = false
       this.runtimes.resumeStarts()
     }

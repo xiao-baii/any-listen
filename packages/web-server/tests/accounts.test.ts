@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdtemp, mkdir, writeFile, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -234,6 +234,11 @@ test('concurrent startup shares a process, idle reap and maintenance gate', asyn
     assert.equal(one, two)
     assert.equal(one.child, undefined)
     assert.ok(one.context)
+    assert.equal(path.relative(dir, runtimes.temporaryRoot).startsWith('..'), true)
+    assert((await stat(path.join(runtimes.temporaryRoot, 'users', user.id, 'cache/proxy'))).isDirectory())
+    assert((await stat(path.join(runtimes.temporaryRoot, 'users', user.id, 'temp'))).isDirectory())
+    for (const name of ['cache', 'temp'])
+      await assert.rejects(stat(path.join(dir, 'users', user.id, name)), { code: 'ENOENT' })
     await delay(5)
     await runtimes.reap()
     assert.equal(runtimes.entries.size, 0)
@@ -247,6 +252,8 @@ test('concurrent startup shares a process, idle reap and maintenance gate', asyn
     runtimes.resumeStarts()
     await pending
     assert.equal(started, true)
+    await runtimes.close()
+    await assert.rejects(stat(runtimes.temporaryRoot), { code: 'ENOENT' })
   } finally {
     runtimes.resumeStarts()
     await runtimes.close()
@@ -818,8 +825,11 @@ test('publication rollback restores switched accounts and releases the maintenan
     }
     await runtimes.get(alice)
     await runtimes.get(bob)
+    const snapshots = path.join(dir, 'publications')
+    await mkdir(path.join(snapshots, 'old-snapshot'), { recursive: true })
     await publications.publish(admin)
     const previous = publications.status().version!
+    assert.deepEqual(await readdir(snapshots), [previous])
     assert.equal(sourceVersion, previous)
     let failOnce = true
     runtimes.prepare = async (user) => {
@@ -833,9 +843,11 @@ test('publication rollback restores switched accounts and releases the maintenan
     assert.equal(publications.status().version, previous)
     assert.equal(sourceVersion, previous)
     assert.equal(publications.status().running, false)
+    assert.deepEqual(await readdir(snapshots), [previous], 'failed snapshots must be removed after rollback')
     assert((await runtimes.get(alice)).port)
     await publications.publish(admin)
     assert.notEqual(publications.status().version, previous)
+    assert.deepEqual(await readdir(snapshots), [publications.status().version], 'successful publication must remove old snapshots')
   } finally {
     await runtimes.close()
     accounts.close()
