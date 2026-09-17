@@ -14,6 +14,7 @@
     onmouseenter,
     onmouseleave,
     ontransitionend,
+    onclose,
   }: {
     visible: boolean
     height?: string
@@ -23,6 +24,7 @@
     onmouseenter: MouseEventHandler<HTMLDivElement>
     onmouseleave: MouseEventHandler<HTMLDivElement>
     ontransitionend?: TransitionEventHandler<HTMLDivElement>
+    onclose?: () => void
   } = $props()
 
   let domContent = $state<HTMLDivElement | null>(null)
@@ -66,13 +68,14 @@
     }
     if (height) popupStyleObj.height = height
 
-    const maxWidth = document.body.clientWidth - 20
+    const maxWidth = document.getElementById('root')!.clientWidth - sidePadding
     let center = domContent!.clientWidth / 2
     let left = rect.left + rect.width / 2 - appState.rootOffsetX - center
     if (left < sidePadding) {
       center -= sidePadding - left
       left = sidePadding
-    } else if (left + domContent!.clientWidth > maxWidth) {
+    }
+    if (left + domContent!.clientWidth > maxWidth) {
       let newLeft = maxWidth - domContent!.clientWidth
       center = center + left - newLeft
       left = newLeft
@@ -120,6 +123,18 @@
   })
 </script>
 
+<svelte:window
+  onpointerdown={(event) => {
+    if (visible && !domContent?.parentElement?.contains(event.target as Node) && !btnel?.contains(event.target as Node)) onclose?.()
+  }}
+  onkeydown={(event) => {
+    if (visible && event.key === 'Escape') onclose?.()
+  }}
+  onresize={() => {
+    if (visible && domContent && btnel) cmpStyle()
+  }}
+/>
+
 {#if render}
   <Portal to="#root">
     <div
@@ -150,7 +165,7 @@
     // width: 645px;
     // left: 8px;
     // margin-top: 12px;
-    max-width: 98%;
+    max-width: calc(100% - 30px);
     max-height: 250px;
     pointer-events: none;
     background-color: var(--color-content-background);
@@ -192,6 +207,8 @@
     }
   }
   .popup-content {
+    box-sizing: border-box;
+    min-width: 0;
     min-height: 0;
     padding: 10px;
     outline: none;

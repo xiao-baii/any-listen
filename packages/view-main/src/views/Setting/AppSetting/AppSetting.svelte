@@ -32,4 +32,7 @@
     min-height: 0;
     padding-top: 10px;
   }
+  @media (max-width: 600px) {
+    .settings-app-container { flex-direction: column; }
+  }
 </style>

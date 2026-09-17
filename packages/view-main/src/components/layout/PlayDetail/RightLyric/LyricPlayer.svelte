@@ -3,8 +3,7 @@
   import { useLyric } from './useLyric.svelte'
   import Btn from '@/components/base/Btn.svelte'
   import { fade } from 'svelte/transition'
-  import { onMount, type ComponentExports } from 'svelte'
-  import { onDomSizeChanged } from '@any-listen/web'
+  import { type ComponentExports } from 'svelte'
   import LyricMenu from './LyricMenu.svelte'
 
   let domLyric = $state<HTMLElement>()
@@ -13,13 +12,12 @@
   let isMsDown = $state(false)
   let isStopScroll = $state(false)
   let timeStr = $state('--/--')
-  let winRadio = $state(document.getElementById('root')!.clientWidth / 1020)
   const textAlign = useSettingValue('playDetail.style.align')
   const isZoomActiveLrc = useSettingValue('playDetail.isZoomActiveLrc')
   // const isShowLyricProgressSetting = useSettingValue('playDetail.isShowLyricProgressSetting')
   const fontSize = useSettingValue('playDetail.style.fontSize')
   const fontWeight = useSettingValue('playDetail.style.fontWeight')
-  const styles = $derived(`--play-detail-lrc-font-size:${(fontSize.val / 100 + 0.8) * winRadio}rem; text-align:${textAlign.val};`)
+  const styles = $derived(`--play-detail-lrc-font-size:calc(${fontSize.val / 100 + 0.8}rem * var(--lyric-size-scale, 0.75)); text-align:${textAlign.val};`)
   let lyricMenu = $state<ComponentExports<typeof LyricMenu>>()
 
   const {
@@ -51,14 +49,6 @@
     },
   })
 
-  onMount(() => {
-    const unsub = onDomSizeChanged(document.getElementById('root')!, (width) => {
-      winRadio = width / 1020
-    })
-    return () => {
-      unsub()
-    }
-  })
 </script>
 
 <div
@@ -101,6 +91,12 @@
   @unplay-color: var(--color-300);
   @unplay-font-color: var(--color-250);
   @played-color: var(--color-primary-dark-100);
+
+  @media (max-width: 600px) {
+    .lyric {
+      --lyric-size-scale: 1;
+    }
+  }
 
   .lyric {
     // text-align: center;

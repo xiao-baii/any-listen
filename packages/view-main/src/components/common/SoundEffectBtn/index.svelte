@@ -20,7 +20,7 @@
     <use xlink:href="#icon-tune" />
   </svg>
 </button>
-<Modal bind:visible bgclose {teleport}>
+<Modal bind:visible bgclose {teleport} minwidth="min(320px, calc(100% - 24px))" maxwidth="min(900px, calc(100% - 24px))">
   <!-- <main class="main"> -->
   <!-- <h2 class="title">{{ $t('theme_edit_modal__title') }}</h2> -->
   <div class="content">
@@ -132,4 +132,17 @@
   //   line-height: 1.25;
   //   color: var(--color-font);
   // }
+  @media (max-width: 600px) {
+    .content {
+      flex-direction: column;
+      overflow-y: auto;
+      &::before { display: none; }
+    }
+    .row {
+      box-sizing: border-box;
+      flex: none;
+      width: 100%;
+      overflow: visible;
+    }
+  }
 </style>

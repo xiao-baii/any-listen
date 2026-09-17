@@ -18,6 +18,11 @@
 </script>
 
 <div class="settings-app-list">
+  <select class="mobile-select" aria-label={$t(settings.find((item) => item.id === active)?.name ?? settings[0].name)} value={active} onchange={(event) => onchange(event.currentTarget.value)}>
+    {#each settings as item (item.id)}
+      <option value={item.id}>{$t(item.name)}</option>
+    {/each}
+  </select>
   <div bind:this={domList} class="list" {@attach verticalScrollbar({ offset: '0', scrollbarWidth: '0.4rem' })}>
     {#each settings as item (item.id)}
       <div
@@ -45,6 +50,26 @@
 </div>
 
 <style lang="less">
+  .mobile-select { display: none; }
+  @media (max-width: 600px) {
+    .settings-app-list {
+      width: auto !important;
+      max-width: none !important;
+      margin: 0 12px 10px;
+      .list { display: none; }
+    }
+    .mobile-select {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      padding: 0 10px;
+      color: var(--color-font);
+      background: var(--color-content-background);
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      font: inherit;
+    }
+  }
   .settings-app-list {
     flex: none;
     width: 18%;

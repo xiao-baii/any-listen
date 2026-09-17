@@ -32,7 +32,7 @@
   const handleShowPopup = (evt: MouseEvent) => {
     if (visible) {
       evt.stopPropagation()
-      if (autoshow) return
+      if (autoshow && matchMedia('(hover: hover) and (pointer: fine)').matches) return
       handlMsLeave()
     } else {
       handlMsEnter()
@@ -80,14 +80,15 @@
   class="container"
   onclick={handleShowPopup}
   onmouseenter={() => {
-    if (!autoshow) return
+    if (!autoshow || !matchMedia('(hover: hover) and (pointer: fine)').matches) return
     handlMsEnter()
   }}
   onmouseleave={() => {
-    if (!autoshow) return
+    if (!autoshow || !matchMedia('(hover: hover) and (pointer: fine)').matches) return
     handlMsLeave()
   }}
   aria-label={arialabel}
+  aria-expanded={visible}
   {onwheel}
 >
   {@render children()}
@@ -96,11 +97,14 @@
     {height}
     {maxheight}
     btnel={domBtn}
+    onclose={hide}
     ontransitionend={() => {
       ontransitionend?.(visible)
     }}
     onmouseenter={handlMsEnter}
-    onmouseleave={handlMsLeave}
+    onmouseleave={() => {
+      if (autoshow && matchMedia('(hover: hover) and (pointer: fine)').matches) handlMsLeave()
+    }}
   >
     {@render content()}
   </Popup>

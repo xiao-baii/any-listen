@@ -78,7 +78,8 @@
     flex-flow: column nowrap;
     gap: 10px;
     width: 500px;
-    min-height: 300px;
-    max-height: 100%;
+    max-width: 100%;
+    height: 100%;
+    min-height: 0;
   }
 </style>

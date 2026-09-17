@@ -211,4 +211,12 @@
     gap: 10px;
     margin-top: 10px;
   }
+  @media (max-width: 600px) {
+    .eq-list::before { display: none; }
+    .eq-item:nth-child(n) {
+      width: 100%;
+      padding: 0;
+      margin-bottom: 15px;
+    }
+  }
 </style>

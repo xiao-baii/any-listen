@@ -1,15 +1,19 @@
 <script lang="ts">
-  import { setMaximized, windowDarg } from '@/shared/browser/widnow.svelte'
+  import { windowDarg } from '@/shared/browser/widnow.svelte'
   import { t } from '@/plugins/i18n'
   import { setShowPlayDetail } from '@/modules/playDetail/store/action'
-  import { onMount } from 'svelte'
+  import { onMount, type ComponentExports } from 'svelte'
+  import LyricMenu from './RightLyric/LyricMenu.svelte'
+  import { useSettingValue } from '@/modules/setting/reactive.svelte'
   import { appEvent } from '@/modules/app/store/event'
   import { useIsFullscreen } from '@/modules/app/reactive.svelte'
   import { setFullScreen } from '@/modules/app/store/action'
 
   const fullscreenState = useIsFullscreen()
+  const lyricFontSize = useSettingValue('playDetail.style.fontSize')
 
   let domBtns = $state<HTMLDivElement>()
+  let lyricMenu = $state<ComponentExports<typeof LyricMenu>>()
 
   onMount(() => {
     const getBtnEl = (el: HTMLElement | null): HTMLButtonElement | null => {
@@ -45,6 +49,16 @@
 
 {#snippet content()}
   <div bind:this={domBtns} class="control-btn no-drag">
+    <button
+      type="button"
+      aria-label={$t('lyric_menu.lrc_size', { size: lyricFontSize.val })}
+      onclick={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect()
+        lyricMenu?.show(rect.left, rect.bottom)
+      }}
+    >
+      <svg height="60%" viewBox="0 0 24 24"><use href="#icon-font-increase" /></svg>
+    </button>
     {#if import.meta.env.VITE_IS_DESKTOP}
       {#if fullscreenState.isFullscreen}
         <button
@@ -61,21 +75,6 @@
           </svg>
         </button>
       {/if}
-    {/if}
-    {#if import.meta.env.VITE_IS_WEB}
-      <button
-        type="button"
-        class="fullscreen"
-        data-click-hide
-        aria-label={fullscreenState.isFullscreen ? $t('maximized_exit') : $t('maximized')}
-        onclick={() => {
-          setMaximized(!fullscreenState.isFullscreen)
-        }}
-      >
-        <svg version="1.1" height="60%" viewBox="0 0 24 24">
-          <use xlink:href={fullscreenState.isFullscreen ? '#icon-window-restore' : '#icon-window-maximize'} />
-        </svg>
-      </button>
     {/if}
     <button
       type="button"
@@ -103,6 +102,8 @@
     {@render content()}
   </div>
 {/if}
+
+<LyricMenu bind:this={lyricMenu} />
 
 <style lang="less">
   :global(.fullscreen) {
@@ -160,5 +161,8 @@
       //   display: none;
       // }
     }
+  }
+  @media (max-width: 600px), (pointer: coarse) {
+    .header .control-btn button { height: 44px; }
   }
 </style>

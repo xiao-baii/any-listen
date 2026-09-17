@@ -19,4 +19,9 @@
     min-height: 0;
     overflow: hidden;
   }
+  @media (max-width: 600px) {
+    .player-detail-main {
+      flex-direction: column;
+    }
+  }
 </style>

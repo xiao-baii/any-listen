@@ -29,4 +29,11 @@
       }
     }
   }
+  @media (max-width: 600px) {
+    .info {
+      min-width: 0;
+      max-height: 100%;
+      margin-top: 0;
+    }
+  }
 </style>

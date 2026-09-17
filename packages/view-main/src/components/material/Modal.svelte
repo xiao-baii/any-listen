@@ -265,4 +265,8 @@
       }
     }
   }
+  @media (max-width: 600px), (pointer: coarse) {
+    .header { height: 44px; }
+    .header button { min-width: 44px; }
+  }
 </style>
