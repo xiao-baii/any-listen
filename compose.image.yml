@@ -1,5 +1,6 @@
 services:
   any-listen:
+    user: '0:0'
     image: any-listen:${ANYLISTEN_TAG:?Set ANYLISTEN_TAG to the imported image tag}
     pull_policy: never
     ports:

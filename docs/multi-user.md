@@ -25,7 +25,7 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD='这里换成你自己的初始密码'
 ```
 
-用户名为 3 至 32 位英文字母、数字、点、下划线或连字符，首位须为字母或数字；密码为 1 至 128 个字符。`.env` 密码用单引号包围，避免 `$` 和 `#` 被解析，含单引号的密码可改用密码文件。Compose 将编排文件旁的 `./data` 挂载到 `/server/data`，不创建命名卷。Linux 首次部署先执行 `mkdir -p data && sudo chown 1000:1000 data`，使容器用户可以写入。
+用户名为 3 至 32 位英文字母、数字、点、下划线或连字符，首位须为字母或数字；密码为 1 至 128 个字符。`.env` 密码用单引号包围，避免 `$` 和 `#` 被解析，含单引号的密码可改用密码文件。Compose 将编排文件旁的 `./data` 挂载到 `/server/data`，不创建命名卷。编排通过 `user: '0:0'` 以容器内 root 用户运行服务，普通 Linux 本地目录挂载无需手动修改归属。若移除 `user:`，则使用镜像默认的 UID/GID 1000，须确保挂载目录允许该用户写入。
 
 ```sh
 docker compose -f compose.multi-user.yml up -d

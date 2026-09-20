@@ -1,5 +1,6 @@
 services:
   any-listen:
+    user: '0:0'
     image: ghcr.io/xiao-baii/any-listen:${ANYLISTEN_TAG:-multi-user-local}
     build:
       context: .
