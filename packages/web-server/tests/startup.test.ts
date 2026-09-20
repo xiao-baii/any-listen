@@ -4,6 +4,9 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
+import http from 'node:http'
+import { setImmediate as nextTurn } from 'node:timers/promises'
+import { createMessage2Call } from 'message2call'
 import WebSocket, { WebSocketServer } from 'ws'
 
 import { Accounts } from '../src/accounts/database'
@@ -11,6 +14,58 @@ import { createGateway } from '../src/accounts/gateway'
 import { Runtimes } from '../src/accounts/runtime'
 import { createIPC } from '../src/preload/ipc'
 import { disconnect } from '../src/preload/ws'
+import { createSocketEvent } from '../src/modules/ipc/event'
+import { createSocketService } from '../src/modules/ipc/socketService'
+import { connectRenderer } from '../src/app/renderer/winMain/rendererEvent'
+
+test('RPC completion after disconnect does not crash the server', { timeout: 10000 }, async () => {
+  const events = createSocketEvent()
+  const sockets = createSocketService(events, async () => ({ clientId: 'test', timestamp: Date.now() }), () => {}, console)
+  const server = http.createServer()
+  server.on('upgrade', sockets.onUpgrade)
+  let release: () => void = () => {}
+  let entered: () => void = () => {}
+  let finished: () => void = () => {}
+  const unsubscribe = connectRenderer(events, {
+    async slow(_socket, fail: boolean) {
+      entered()
+      await new Promise<void>(resolve => { release = resolve })
+      finished()
+      if (fail) throw new Error('source request failed')
+      return 'ok'
+    },
+  })
+  try {
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    for (const fail of [false, true]) {
+      const ws = new WebSocket(`ws://127.0.0.1:${(server.address() as { port: number }).port}/socket?t=main`)
+      await once(ws, 'open')
+      const rpc = createMessage2Call<{ slow: (fail: boolean) => Promise<string> }>({
+        exposeObj: {}, sendMessage: data => ws.send(JSON.stringify(data)),
+      })
+      ws.on('message', data => rpc.message(JSON.parse(data.toString())))
+      const started = new Promise<void>(resolve => { entered = resolve })
+      const completed = new Promise<void>(resolve => { finished = resolve })
+      const request = rpc.remote.slow(fail).catch(() => {})
+      await started
+      const closed = once(sockets.getSockets()[0], 'close')
+      ws.terminate()
+      await closed
+      rpc.destroy()
+      release()
+      await completed
+      await request
+      await nextTurn()
+      await nextTurn()
+    }
+  } finally {
+    release()
+    unsubscribe()
+    sockets.close()
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  }
+})
 
 test('gateway caches versioned build assets but revalidates entry points and protects account data', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'any-listen-startup-'))

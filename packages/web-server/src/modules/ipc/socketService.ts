@@ -124,9 +124,11 @@ export const createSocketService = (
       disconnected = true
     })
     socket.sendMessage = function (message) {
-      if (disconnected) throw new Error('disconnected')
+      // In-flight RPC handlers can finish after their client has disconnected.
+      if (socket.readyState !== socket.OPEN) return
       void encryptMsg(socket.keyInfo, JSON.stringify(message))
         .then((data) => {
+          if (socket.readyState !== socket.OPEN) return
           socket.send(data)
         })
         .catch((err: Error) => {
