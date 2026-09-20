@@ -6,6 +6,7 @@ import path from 'node:path'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 
 import { createDislikeList } from '@any-listen/app/modules/dislikeList/service'
+import { appLogEvent, logs } from '@any-listen/app/modules/logs'
 import { createMusicList } from '@any-listen/app/modules/musicList/service'
 import { createOnlineListSync } from '@any-listen/app/modules/musicList/onlineSync'
 import { createProxyService } from '@any-listen/app/modules/proxyServer'
@@ -270,11 +271,16 @@ export const createAccountContext = async (options: {
       return result
     }])) : {}
     if (draft) Object.assign(adminExpose, {
+      getAppLogs: (_socket: ServerSocket, type: AnyListen.LogType) => logs[type].getLogs(),
+      clearAppLog: (_socket: ServerSocket, type: AnyListen.LogType) => logs[type].clearLog(),
       getExtensionList: () => draft.call('getLocalExtensionList', []),
       restartExtensionHost: () => draft.call('getLocalExtensionList', []),
       getExtensionLastLogs: (_socket: ServerSocket, id?: string) => sourceCall('getExtensionLastLogs', [id]),
       clearExtensionLogs: (_socket: ServerSocket, id?: string) => sourceCall('clearExtensionLogs', [id]),
     })
+    if (draft) subscriptions.push(appLogEvent.on('logOutput', (type, log) => {
+      broadcast(socket => { void socket.remote.appLog(type, log).catch(() => {}) })
+    }))
     subscriptions.push(connectRenderer(socketEvent, protectRpc({ ...expose, ...adminExpose }, { role: options.role ?? 'user', run })))
     const app = new Koa()
     app.on('error', () => {})

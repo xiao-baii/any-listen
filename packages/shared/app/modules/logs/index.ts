@@ -63,10 +63,11 @@ const createLogcat = (logType: AnyListen.LogType) => {
       },
     },
     getLogs: async () => {
-      if (!logPath) return ''
+      if (!logPath) return cache.length ? `${cache.join('\n')}\n` : ''
       return readLastLines(joinPath(logPath, logName), 200)
     },
     clearLog: async () => {
+      cache.length = 0
       if (!logPath) return
       const logFile = joinPath(logPath, logName)
       if (await checkFile(logFile)) {

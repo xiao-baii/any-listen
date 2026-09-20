@@ -46,7 +46,8 @@ const handleConnect = async (
   exposeObj: AnyListen.IPC.ClientIPCActions<IPCSocket>,
   host: string,
   authCode: string,
-  winType: AnyListen.IPC.WinType
+  winType: AnyListen.IPC.WinType,
+  initialKeyInfo?: KeyInfo
 ) => {
   // const hostInfo = await getSyncHost()
   // console.log(hostInfo)
@@ -55,7 +56,7 @@ const handleConnect = async (
   const urlInfo = parseUrl(host)
   await disconnectServer(false)
   if (id != connectId) return null
-  const keyInfo = await handleAuth(urlInfo, authCode)
+  const keyInfo = initialKeyInfo ?? (await handleAuth(urlInfo, authCode))
   if (id != connectId) return null
   handleInitProxyUrlToken(urlInfo, keyInfo)
   await socketConnect(exposeObj, urlInfo, keyInfo, winType)
@@ -69,9 +70,10 @@ const connect = async (
   host: string,
   authCode: string,
   winType: AnyListen.IPC.WinType,
-  onFailed: (message: string) => void
+  onFailed: (message: string) => void,
+  initialKeyInfo?: KeyInfo
 ) => {
-  const result = await handleConnect(exposeObj, host, authCode, winType).catch((err: Error) => {
+  const result = await handleConnect(exposeObj, host, authCode, winType, initialKeyInfo).catch((err: Error) => {
     console.log(err)
     switch (err.message) {
       case IPC_CODE.missingAuthCode:
@@ -115,11 +117,13 @@ export const createIPC = ({
   onDisconnected,
   onFailed,
   onLogout,
+  initialKeyInfo,
 }: {
   exposeObj: AnyListen.IPC.ClientIPCActions<IPCSocket>
   host: string
   authCode: string
   winType: AnyListen.IPC.WinType
+  initialKeyInfo?: KeyInfo
   onConnected: (socket: IPCSocket) => void
   onDisconnected: () => void
   onFailed: (message: string) => void
@@ -128,5 +132,5 @@ export const createIPC = ({
   events.connected = onConnected
   events.disconnected = onDisconnected
   events.logout = onLogout
-  void connect(exposeObj, host, authCode, winType, onFailed)
+  void connect(exposeObj, host, authCode, winType, onFailed, initialKeyInfo)
 }

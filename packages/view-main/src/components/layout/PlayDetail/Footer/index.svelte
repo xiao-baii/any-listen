@@ -91,8 +91,12 @@
     }
   }
   @media (max-width: 600px), (pointer: coarse) {
-    .side > :global(.container) { gap: 0; }
-    .side :global(button) {
+    .side > :global(.container) {
+      align-items: center;
+      gap: 0;
+    }
+    .side :global(button),
+    .side :global(button.btn) {
       box-sizing: border-box;
       display: inline-flex;
       align-items: center;

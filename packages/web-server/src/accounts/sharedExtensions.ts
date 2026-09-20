@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { MessageChannel, Worker } from 'node:worker_threads'
 
 import type { ExtensionSeriveTypes } from '@any-listen/app/modules/worker/utils'
+import { logs } from '@any-listen/app/modules/logs'
 import { DEFAULT_LANG, EXTENSION } from '@any-listen/common/constants'
 import defaultSetting from '@any-listen/common/defaultSetting'
 import { createMessage2Call } from 'message2call'
@@ -175,7 +176,7 @@ export class SharedExtensions {
         removeExtensionIconPublicPath: () => {},
         showMessageBox: () => undefined,
         closeMessageBox: () => {},
-        logger: () => {},
+        logger: logs.ExtensionService.logcat,
       },
       timeout: 60_000,
       isSendErrorStack: false,

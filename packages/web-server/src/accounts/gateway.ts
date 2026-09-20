@@ -143,7 +143,9 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     if (!info?.isFile()) fail(404, 'Not found')
     res.writeHead(200, {
       'Content-Type': mime[path.extname(file)] ?? 'application/octet-stream',
-      'Cache-Control': 'no-store',
+      'Cache-Control': /[.-][\w-]{8}\.(?:js|css|woff2?|ttf|otf|png|jpe?g|webp|svg|ico|wav|mp3)$/.test(path.basename(file))
+        ? 'public, max-age=5184000, immutable'
+        : 'no-cache',
       'X-Content-Type-Options': 'nosniff',
     })
     if (req.method === 'HEAD') res.end()

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { MessageChannel, Worker } from 'node:worker_threads'
 
 import type { ExtensionSeriveTypes } from '@any-listen/app/modules/worker/utils'
+import { logs } from '@any-listen/app/modules/logs'
 import { EXTENSION } from '@any-listen/common/constants'
 import defaultSetting from '@any-listen/common/defaultSetting'
 import { createMessage2Call } from 'message2call'
@@ -50,7 +51,7 @@ export const createDraftExtensions = (options: {
     const ready = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject })
     const rpc = createMessage2Call<ExtensionSeriveTypes>({
       exposeObj: {
-        inited: () => resolveReady(), onExtensionEvent: () => {}, logger: () => {},
+        inited: () => resolveReady(), onExtensionEvent: () => {}, logger: logs.ExtensionService.logcat,
         createExtensionIconPublicPath: async (_dir: string, file: string) => {
           const base = await realpath(directory)
           const resolved = await realpath(file)

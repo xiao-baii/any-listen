@@ -129,7 +129,7 @@ export const buildConfig = (target, port = 9200, ipcScript) => {
         //   'view-main': 'index.html',
         // },
         output: {
-          entryFileNames: '[name][hash].js',
+          entryFileNames: '[name]-[hash].js',
           // format: 'cjs',
           // experimentalMinChunkSize: 50_000,
           // manualChunks: {
@@ -206,7 +206,7 @@ export const buildConfig = (target, port = 9200, ipcScript) => {
       format: 'iife',
       rolldownOptions: {
         output: {
-          entryFileNames: '[name][hash].js',
+          entryFileNames: '[name]-[hash].js',
           // codeSplitting: true,
           format: 'iife',
           // experimentalMinChunkSize: 50_000,

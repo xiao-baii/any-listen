@@ -2,6 +2,7 @@ import { logFormat } from '@any-listen/common/tools'
 import { onMount, untrack, type ComponentExports } from 'svelte'
 
 import { extI18n } from '@/modules/extension/i18n'
+import { showNotify } from '@/components/apis/notify'
 import { extensionEvent } from '@/modules/extension/store/event'
 import { clearExtensionLogs, getExtensionLastLogs } from '@/shared/ipc/extension'
 
@@ -55,6 +56,9 @@ export const useExtensionLog = (data: {
         })
         extensionLogItems = list
         if (list.length && data.activeLogType === 'extension') data.avtiveLog = list[0].id
+      }).catch((error: Error) => {
+        initedExtensionLogs = false
+        if (!isUnmount) showNotify(error.message)
       })
     })
   })

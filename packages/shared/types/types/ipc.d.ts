@@ -61,6 +61,7 @@ declare global {
         onFailed: (message: string) => void
         onLogout: () => void
         pwd: string
+        account?: { id: string; username: string }
         clientCall: ClientIPC
       }) => void
       type WinType = 'main' | 'desktopLyric'

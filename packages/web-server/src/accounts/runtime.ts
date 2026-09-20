@@ -99,12 +99,12 @@ export class Runtimes {
     if (failure && failure.count >= 5) fail(503, 'Account service repeatedly failed. Administrator retry required.')
     if (failure && failure.until > Date.now()) fail(503, 'Account service is restarting. Try again shortly.')
     const start = this.start(user)
-      .catch(() => {
+      .catch((error: Error) => {
         const count = (this.failures.get(user.id)?.count ?? 0) + 1
         this.failures.set(user.id, {
           count,
           until: Date.now() + Math.min(60_000, 1000 * 2 ** count),
-          message: 'Account initialization failed',
+          message: error.message,
         })
         return fail(503, 'Account service failed to initialize. Try again later.')
       })

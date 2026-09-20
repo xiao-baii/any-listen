@@ -1,3 +1,4 @@
+import { account } from '@/accounts/state.svelte'
 import app from './app/remote'
 import dislike from './dislike/remote'
 import extension from './extension/remote'
@@ -43,6 +44,7 @@ export const connectIPC = (
     onFailed,
     onLogout,
     pwd,
+    account: account.user ?? undefined,
   })
 }
 

@@ -41,6 +41,7 @@ const connectIPCService: AnyListen.IPC.ConnectIPCSrivice = ({
   onLogout,
   pwd,
   clientCall,
+  account,
 }) => {
   const exposeObj: ExposeFunctions = {
     ...createExposeApp(clientCall),
@@ -57,6 +58,7 @@ const connectIPCService: AnyListen.IPC.ConnectIPCSrivice = ({
     host,
     authCode: pwd,
     winType: 'main',
+    initialKeyInfo: account ? { serverId: account.id, serverName: account.username, token: 'managed-session' } : undefined,
     onDisconnected,
     onFailed,
     onLogout,

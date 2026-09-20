@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { test } from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -11,6 +13,7 @@ import Database from 'better-sqlite3'
 import { createMessage2Call } from 'message2call'
 import WebSocket from 'ws'
 import defaultSetting from '../../shared/common/defaultSetting'
+import { logs } from '../../shared/app/modules/logs'
 
 import { interceptors } from '../../shared/nodejs/node_modules/undici'
 import { isPublicAddress, publicNetworkAgent } from '../../shared/nodejs/publicNetwork'
@@ -20,11 +23,57 @@ import { createGateway } from '../src/accounts/gateway'
 import { migrate } from '../src/accounts/migration'
 import { snapshotExtensions, Publications } from '../src/accounts/publications'
 import { Runtimes } from '../src/accounts/runtime'
+import { SharedExtensions } from '../src/accounts/sharedExtensions'
+import { createDraftExtensions } from '../src/accounts/draftExtensions'
 import { signIdentity, verifyIdentity, LoginLimiter } from '../src/accounts/security'
 
 const root = process.env.ACCOUNT_TEST_ROOT!
 const password = 'Test-password-12345'
 const workspace = () => mkdtemp(path.join(tmpdir(), 'any-listen-test-'))
+
+test('both extension hosts retain worker diagnostics and separate history from live logs', { timeout: 10000 }, async () => {
+  const dir = await workspace()
+  const entry = path.join(dir, 'diagnostics.worker.mjs')
+  const source = new SharedExtensions(entry, path.join(dir, 'runtime'))
+  const draft = createDraftExtensions({ entry, directory: path.join(dir, 'draft'),
+    origins: [], mirrors: () => '', locale: () => 'en-us', icon: () => '' })
+  try {
+    const rpcModule = pathToFileURL(createRequire(path.join(root, 'packages/web-server/package.json')).resolve('message2call')).href
+    await writeFile(entry, `
+      import { parentPort } from 'node:worker_threads';
+      import { createMessage2Call } from ${JSON.stringify(rpcModule)};
+      parentPort.once('message', port => {
+        const rpc = createMessage2Call({
+          exposeObj: { async setExtensionState() {
+            await rpc.remote.logger.error('worker diagnostic', process.env.ANYLISTEN_USER_ID);
+            throw new Error('diagnostic startup failure');
+          } },
+          sendMessage: data => port.postMessage(data),
+        });
+        port.on('message', data => rpc.message(data));
+        void rpc.remote.inited();
+      });
+    `)
+    await writeFile(path.join(dir, 'extension-preload.js'), '')
+    await mkdir(path.join(dir, 'release'))
+    for (const [id, start] of [
+      ['public-source', () => source.switch('test', path.join(dir, 'release'), [], '')],
+      ['draft-editor', () => draft.call('getLocalExtensionList', [])],
+    ] as const) {
+      await logs.ExtensionService.clearLog()
+      assert.equal(await logs.ExtensionService.getLogs(), '')
+      await assert.rejects(start(), /diagnostic startup failure/)
+      const history = await logs.ExtensionService.getLogs()
+      assert(history.includes(`ERROR worker diagnostic ${id}`), history)
+      assert.equal((history + 'next live log\n').split('\n').at(-2), 'next live log')
+    }
+  } finally {
+    await source.close()
+    await draft.close()
+    await logs.ExtensionService.clearLog()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
 
 test('startup initializes an empty database and preserves existing accounts across restarts', async () => {
   const dir = await workspace()
@@ -262,6 +311,31 @@ test('concurrent startup shares a process, idle reap and maintenance gate', asyn
   }
 })
 
+test('startup failures retain filesystem diagnostics for administrators without exposing them to clients', async () => {
+  const dir = await workspace(), accounts = new Accounts(dir)
+  const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
+  try {
+    const user = await accounts.create('alice', password, 'user', null)
+    const usersPath = path.join(dir, 'users')
+    await writeFile(usersPath, 'Blocks creation of account directories')
+    await assert.rejects(runtimes.get(user), {
+      message: 'Account service failed to initialize. Try again later.',
+    })
+    const [failure] = runtimes.status().errors
+    assert.equal(failure.userId, user.id)
+    assert(failure.message.includes(usersPath), failure.message)
+    assert.equal(failure.count, 1)
+    await rm(usersPath)
+    runtimes.retry(user.id)
+    await runtimes.get(user)
+    assert.deepEqual(runtimes.status().errors, [])
+  } finally {
+    await runtimes.close()
+    accounts.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('revoking a session blocks an administrator request still uploading its body', async () => {
   const dir = await workspace(),
     accounts = new Accounts(dir)
@@ -447,6 +521,7 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
           dislikeAction: () => {},
           settingChanged: () => {},
           extensionEvent: (event: unknown) => { events.push(event) },
+          appLog: (type: string, log: string) => { events.push({ action: 'appLog', type, log }) },
         },
         timeout: 5000,
         sendMessage: (data: unknown) => ws.send(JSON.stringify(data)),
@@ -514,6 +589,19 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
       bRpc = await rpc(bob, bEvents)
     const adminEvents: any[] = []
     const adminRpc = await rpc(admin, adminEvents)
+    for (const type of ['App', 'ExtensionService', 'ProxyService', 'WebdavSync'] as const) {
+      const marker = `admin-log-check-${type}`
+      logs[type].logcat.info(marker)
+      assert.match(await adminRpc.remote.getAppLogs(type), new RegExp(marker))
+      await assert.rejects(aRpc.remote.getAppLogs(type), /Forbidden/)
+      await assert.rejects(aRpc.remote.clearAppLog(type), /Forbidden/)
+      assert.match(await adminRpc.remote.getAppLogs(type), new RegExp(marker))
+      await adminRpc.remote.clearAppLog(type)
+      assert.equal(await adminRpc.remote.getAppLogs(type), '')
+    }
+    for (let attempt = 0; attempt < 50 && !adminEvents.some(event => event.action === 'appLog'); attempt++) await delay(20)
+    assert(adminEvents.some(event => event.action === 'appLog' && event.log.includes('admin-log-check-')))
+    assert(!aEvents.some((event: any) => event.action === 'appLog'))
     const logEvent = { value: { action: 'logOutput', data: { id: 'lx-api-source-loader', name: 'Loader',
       type: 'info', timestamp: Date.now(), message: 'Administrator source log' } }, assets: {} }
     await (await runtimes.get(admin.user)).context.sourceEvent(logEvent)

@@ -6,7 +6,7 @@ const scriptsRequire = createRequire(path.resolve(__dirname, '../../shared/scrip
 const out = path.join(__dirname, '.generated')
 async function main() {
   const testFile = process.argv[2] ?? 'accounts.test.ts'
-  if (!['accounts.test.ts', 'extensions.test.ts', 'database.test.ts', 'sharedSources.test.ts', 'player.test.ts', 'musicList.test.ts'].includes(testFile)) throw new Error('Unknown test file')
+  if (!['accounts.test.ts', 'extensions.test.ts', 'database.test.ts', 'sharedSources.test.ts', 'player.test.ts', 'musicList.test.ts', 'startup.test.ts'].includes(testFile)) throw new Error('Unknown test file')
   if (testFile === 'database.test.ts') {
     await scriptsRequire('esbuild').build({
       entryPoints: [path.join(__dirname, '../src/accounts/database.worker.ts')],
