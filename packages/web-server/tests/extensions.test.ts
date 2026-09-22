@@ -25,8 +25,6 @@ test(
     const root = process.env.ACCOUNT_TEST_ROOT!
     const dir = await mkdtemp(path.join(tmpdir(), 'any-listen-official-'))
     const accounts = new Accounts(dir)
-    const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
-    const gateway = createGateway(accounts, runtimes, path.join(root, 'build/public'))
     let remoteScript = ''
     const media = http.createServer((req, res) => {
       if (req.url === '/source.js') { res.end(remoteScript); return }
@@ -36,16 +34,22 @@ test(
       res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': '10' })
       res.end('0123456789')
     })
+    media.listen(0, '127.0.0.1')
+    await once(media, 'listening')
+    const musicUrl = `http://127.0.0.1:${(media.address() as { port: number }).port}/fixture.mp3`
+    const previousOrigins = process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS
+    process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS = JSON.stringify([new URL(musicUrl).origin])
+    const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
+    const gateway = createGateway(accounts, runtimes, path.join(root, 'build/public'))
+    if (previousOrigins === undefined) delete process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS
+    else process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS = previousOrigins
     let socket: WebSocket | undefined
     let otherSocket: WebSocket | undefined
     let adminSocket: WebSocket | undefined
     try {
-      media.listen(0, '127.0.0.1')
       gateway.server.listen(0, '127.0.0.1')
       await once(gateway.server, 'listening')
       const origin = `http://127.0.0.1:${(gateway.server.address() as { port: number }).port}`
-      const musicUrl = `http://127.0.0.1:${(media.address() as { port: number }).port}/fixture.mp3`
-      runtimes.allowedMediaOrigins = [new URL(musicUrl).origin]
       const password = 'Official-fixture-12345'
       const admin = await accounts.create('admin', password, 'admin', null)
       const user = await accounts.create('alice', password, 'user', admin.id)

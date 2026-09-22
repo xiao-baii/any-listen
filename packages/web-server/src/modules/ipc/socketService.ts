@@ -183,34 +183,25 @@ export const createSocketService = (
   })
   interval.unref()
 
-  const authConnection = (req: IncomingMessage, callback: (err: Error | null, keyInfo: KeyInfo | null) => void) => {
-    authConnect(req)
-      .then((keyInfo) => {
-        callback(null, keyInfo)
-      })
-      .catch((err: Error) => {
-        callback(err, null)
-      })
-  }
   function onSocketError(err: Error) {
     appLog.error('[WebSocket] Connection error', err)
   }
 
   const onUpgrade = (request: IncomingMessage, socket: Socket, head: Buffer) => {
     socket.addListener('error', onSocketError)
-    authConnection(request, (err, keyInfo) => {
+    void authConnect(request).then((keyInfo) => {
       if (socket.destroyed) return
-      if (closed || err) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-        socket.destroy()
-        return
-      }
+      if (closed) throw new Error('Socket service is closed')
       socket.removeListener('error', onSocketError)
 
       wss.handleUpgrade(request, socket, head, (ws) => {
-        ws.keyInfo = keyInfo!
+        ws.keyInfo = keyInfo
         wss.emit('connection', ws, request)
       })
+    }).catch(() => {
+      if (socket.destroyed) return
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+      socket.destroy()
     })
   }
 

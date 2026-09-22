@@ -4,6 +4,7 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import path from 'node:path'
 import { formatExtensionGHMirrorHosts } from '@any-listen/common/tools'
+import { getMimeType } from '@any-listen/common/mime'
 import { logs } from '@any-listen/app/modules/logs'
 
 import { Accounts, publicUser, type User, type Session } from './database'
@@ -43,16 +44,6 @@ const cookieToken = (req: IncomingMessage) =>
     .map((v) => v.trim())
     .find((v) => v.startsWith(`${COOKIE}=`))
     ?.slice(COOKIE.length + 1) ?? ''
-const mime: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.woff2': 'font/woff2',
-  '.ico': 'image/x-icon',
-  '.json': 'application/json',
-}
 type Auth = { user: User; session: Session }
 
 export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir: string, configuredOrigin?: string) => {
@@ -138,7 +129,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     const info = await stat(file).catch(() => null)
     if (!info?.isFile()) fail(404, 'Not found')
     res.writeHead(200, {
-      'Content-Type': mime[path.extname(file)] ?? 'application/octet-stream',
+      'Content-Type': path.extname(file) === '.html' ? 'text/html; charset=utf-8' : getMimeType(file),
       'Cache-Control': /[.-][\w-]{8}\.(?:js|css|woff2?|ttf|otf|png|jpe?g|webp|svg|ico|wav|mp3)$/.test(path.basename(file))
         ? 'public, max-age=5184000, immutable'
         : 'no-cache',

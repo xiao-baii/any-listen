@@ -251,11 +251,7 @@ export class SharedExtensions {
           throw new Error(`Public source requires personal capabilities: ${extension.id}`)
       }
       await rpc.remote.startExtensions()
-      await verifyManagedExtensions({
-        getLocalExtensionList: () => rpc.remote.getLocalExtensionList(),
-        getExtensionConfigValues: (id, fields) => rpc.remote.getExtensionConfigValues(id, fields),
-        getExtensionLastLogs: async () => [{ logs: startupLogs.join('\n') }],
-      })
+      await verifyManagedExtensions(rpc.remote, startupLogs)
       checkingStartup = false
       startupLogs.length = 0
       for (let attempt = 0; ; attempt++) {

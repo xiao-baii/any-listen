@@ -65,12 +65,7 @@ export class Runtimes {
       }
     }
   }
-  private mediaOrigins: string[] = JSON.parse(process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS ?? '[]')
-  get allowedMediaOrigins() { return this.mediaOrigins }
-  set allowedMediaOrigins(origins: string[]) {
-    this.mediaOrigins = origins
-    configurePublicNetwork(origins)
-  }
+  readonly allowedMediaOrigins: string[] = JSON.parse(process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS ?? '[]')
   proxyAllResources = false
   onlineResourceEnabled = false
   ghMirrorHosts = defaultSetting['extension.ghMirrorHosts']

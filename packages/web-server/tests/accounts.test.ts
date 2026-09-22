@@ -407,8 +407,6 @@ test('publication snapshots contain only managed data and validate script refere
 test('real gateway: account isolation, backup, RPC authorization, websocket revocation, Range', { timeout: 120000 }, async () => {
   const dir = await workspace(),
     accounts = new Accounts(dir)
-  const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
-  const gateway = createGateway(accounts, runtimes, path.join(root, 'build/public'))
   const sockets: WebSocket[] = []
   let streamClosed = false
   const media = http.createServer((req, res) => {
@@ -429,6 +427,15 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
       res.end('0123456789')
     }
   })
+  media.listen(0, '127.0.0.1')
+  await once(media, 'listening')
+  const mediaUrl = `http://127.0.0.1:${(media.address() as { port: number }).port}/test.mp3`
+  const previousOrigins = process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS
+  process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS = JSON.stringify([new URL(mediaUrl).origin])
+  const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
+  const gateway = createGateway(accounts, runtimes, path.join(root, 'build/public'))
+  if (previousOrigins === undefined) delete process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS
+  else process.env.ANYLISTEN_ALLOWED_MEDIA_ORIGINS = previousOrigins
   try {
     gateway.server.listen(0, '127.0.0.1')
     await once(gateway.server, 'listening')
@@ -796,12 +803,8 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
         code: 'ENOENT',
       })
     }
-    media.listen(0, '127.0.0.1')
-    await once(media, 'listening')
-    const mediaUrl = `http://127.0.0.1:${(media.address() as { port: number }).port}/test.mp3`
-    const blockedMedia = await api(`/u/${alice.user.id}/api/p_url/${encodeURIComponent(mediaUrl)}`, alice.cookie)
+    const blockedMedia = await api(`/u/${alice.user.id}/api/p_url/${encodeURIComponent(mediaUrl.replace('127.0.0.1', '127.0.0.2'))}`, alice.cookie)
     assert.equal(blockedMedia.status, 500)
-    runtimes.allowedMediaOrigins = [new URL(mediaUrl).origin]
     await runtimes.stop(alice.user.id)
     const restartedAlice = await rpc(alice, [])
     assert.equal((await restartedAlice.remote.getPlayInfo()).info.time, 123)

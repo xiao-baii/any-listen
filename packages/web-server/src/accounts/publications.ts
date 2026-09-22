@@ -178,7 +178,6 @@ export class Publications {
       for (const user of active) {
         this.message = `Applying to ${user.username}`
         try {
-          await this.runtimes.stop(user.id)
           await this.runtimes.get(user, true)
         } catch (error) {
           throw new Error(`${user.username}: ${(error as Error).message}`)
