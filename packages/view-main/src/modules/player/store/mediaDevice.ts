@@ -1,6 +1,6 @@
 import { updateSetting } from '@/modules/setting/store/action'
 import { settingState } from '@/modules/setting/store/state'
-import { getItem, setItem } from '@/shared/browser/store'
+import { getItem, setItem } from '@/shared/localStore'
 
 import { playerEvent } from './event'
 

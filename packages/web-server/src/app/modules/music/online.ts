@@ -8,7 +8,7 @@ import { createMusicCache } from './shared'
 
 export const createOnlineMusic = (
   appState: typeof defaultAppState,
-  workers: Pick<typeof defaultWorkers, 'dbService' | 'utilService'>,
+  workers: { dbService: typeof defaultWorkers.dbService; utilService: Pick<typeof defaultWorkers.utilService, 'lyricS2T'> },
   resources: Pick<
     typeof defaultResources,
     | 'getMusicLyricByExtensionSource'
@@ -193,16 +193,6 @@ export const createOnlineMusic = (
       return { info: await buildLyricInfo(local), isFromCache: true }
     }
     throw new Error('get lyric info failed')
-    // if (!isRefresh) {
-    //   const lyricInfo = await getCachedLyricInfo(musicInfo)
-    //   if (lyricInfo) return { info: await buildLyricInfo(lyricInfo), isFromCache: false }
-    // }
-    // const info = await getMusicLyricResource({ musicInfo })
-    // void saveLyricInfo(musicInfo, info)
-    // return {
-    //   info,
-    //   isFromCache: false,
-    // }
   }
   return { getMusicUrlByExtSource, getMusicUrl, getMusicPicByExtSource, getMusicPicUrl, getLyricInfoByExtSource, getLyricInfo }
 }

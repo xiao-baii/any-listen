@@ -125,6 +125,7 @@ export const buildConfig = (target, port = 9300, ipcScript) => {
           },
       rolldownOptions: {
         output: {
+          minify: { compress: { dropConsole: true } },
           entryFileNames: '[name][hash].js',
           // format: 'cjs',
           // experimentalMinChunkSize: 50_000,

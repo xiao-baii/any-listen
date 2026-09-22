@@ -17,6 +17,72 @@ import { disconnect } from '../src/preload/ws'
 import { createSocketEvent } from '../src/modules/ipc/event'
 import { createSocketService } from '../src/modules/ipc/socketService'
 import { connectRenderer } from '../src/app/renderer/winMain/rendererEvent'
+import { createServerTheme } from '../src/app/renderer/winMain/rendererEvent/theme'
+import { initAppLog, logs } from '@any-listen/app/modules/logs'
+import { readFile } from 'node:fs/promises'
+import { LOG_NAMES } from '@any-listen/common/constants'
+import { setTimeout as delay } from 'node:timers/promises'
+
+test('APP logs persist separately from data and can be read and cleared', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'any-listen-logs-'))
+  try {
+    const dataPath = path.join(dir, 'data')
+    const logPath = path.join(dataPath, '../log')
+    await initAppLog(dataPath, logPath)
+    logs.App.logcat.error('[RPC getMusicUrl] Failed', new Error('source unavailable'))
+    const file = path.join(logPath, LOG_NAMES.APP)
+    let content = ''
+    for (let attempt = 0; attempt < 50; attempt++) {
+      content = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return ''
+        throw error
+      })
+      if (content.includes('source unavailable')) break
+      await delay(20)
+    }
+    assert.match(content, /\d{4}-\d{2}-\d{2} .* ERROR \[RPC getMusicUrl\] Failed/)
+    await assert.rejects(readFile(path.join(dataPath, LOG_NAMES.LOG_DIR, LOG_NAMES.APP)), { code: 'ENOENT' })
+    assert.match(await logs.App.getLogs(), /source unavailable/)
+    await logs.App.clearLog()
+    assert.equal(await logs.App.getLogs(), '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('pending broadcasts are handled when the client disconnects', { timeout: 10000 }, async () => {
+  const events = createSocketEvent()
+  const errors: Error[] = []
+  const sockets = createSocketService(events, async () => ({ clientId: 'test', timestamp: Date.now() }), () => {}, {
+    info() {}, error(error: Error) { errors.push(error) },
+  })
+  const unsubscribe = connectRenderer(events, {})
+  const server = http.createServer()
+  server.on('upgrade', sockets.onUpgrade)
+  try {
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const ws = new WebSocket(`ws://127.0.0.1:${(server.address() as { port: number }).port}/socket?t=main`)
+    await once(ws, 'open')
+    const socket = sockets.getSockets()[0]
+    socket.isInited = true
+    const received = once(ws, 'message')
+    const themes = createServerTheme(sockets.broadcast)
+    await themes.themeListChanged([])
+    await themes.themeListChanged([])
+    await received
+    const closed = once(socket, 'close')
+    socket.terminate()
+    await closed
+    await nextTurn()
+    await nextTurn()
+    assert.equal(errors.length, 0, 'disconnect cancellation must not produce error logs')
+  } finally {
+    unsubscribe()
+    sockets.close()
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  }
+})
 
 test('RPC completion after disconnect does not crash the server', { timeout: 10000 }, async () => {
   const events = createSocketEvent()

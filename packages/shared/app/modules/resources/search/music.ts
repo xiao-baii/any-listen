@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-condition */
-import { SINGERS_RXP } from '@any-listen/common/constants'
+import { sortSingle, getIntv, trimStr, filterStr } from './normalize'
+import { logs } from '../../logs'
 
 import { services, type ResourceServices } from '../shared'
 import { versionChars } from './versionChars'
@@ -18,7 +19,7 @@ export const createFallbackSearch = (services: ResourceServices) => {
     limit: number
     page: number
   }> => {
-    // console.log(extensionId, source, artist, page, limit)
+
     if (!name.trim().length) {
       return {
         list: [],
@@ -36,15 +37,7 @@ export const createFallbackSearch = (services: ResourceServices) => {
         limit,
         page,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          list: result.list ?? [],
-          total: result.total,
-          limit: result.limit ?? 10,
-          page: result.page ?? 1,
-        }
-      })
+      .then(({ list, total, limit, page }) => ({ list, total, limit, page }))
   }
 
   type FindMusicType = Omit<AnyListen.Music.MusicInfoOnline, 'name'> & {
@@ -69,30 +62,13 @@ export const createFallbackSearch = (services: ResourceServices) => {
     albumName: string
     interval: string | null
   }): Promise<AnyListen.Music.MusicInfoOnline | null> => {
-    // console.log({
-    //   extensionId,
-    //   name,
-    //   singer,
-    //   albumName,
-    //   interval,
-    //   source: s,
-    // })
     // TODO: auto reversal of singer and name
     const list = await musicSearch(extensionId, s, name, singer, 1, 20).catch((err) => {
-      console.error(err)
+      logs.App.logcat.warn(`[Music search ${extensionId}/${s}] Source failed; trying alternatives`, err)
       return null
     })
     if (!list) return null
 
-    const sortSingle = (singer: string) =>
-      SINGERS_RXP.test(singer)
-        ? singer
-            .split(SINGERS_RXP)
-            .map((s) => s.trim())
-            .filter((s) => s)
-            .sort((a, b) => a.localeCompare(b))
-            .join('、')
-        : singer || ''
     const sortMusic = (arr: FindMusicType[], callback: (item: FindMusicType) => boolean) => {
       const tempResult = []
       for (let i = arr.length - 1; i > -1; i--) {
@@ -109,21 +85,6 @@ export const createFallbackSearch = (services: ResourceServices) => {
       tempResult.reverse()
       return tempResult
     }
-    const getIntv = (interval?: string | null) => {
-      if (!interval) return 0
-      // if (musicInfo._interval) return musicInfo._interval
-      const intvArr = interval.split(':')
-      let intv = 0
-      let unit = 1
-      while (intvArr.length) {
-        intv += parseInt(intvArr.pop()!) * unit
-        unit *= 60
-      }
-      return intv
-    }
-    const trimStr = (str: string) => (typeof str == 'string' ? str.trim() : str || '')
-    const filterStr = (str: string) =>
-      typeof str == 'string' ? str.replace(/\s|'|\.|,|，|&|"|、|\(|\)|（|）|`|~|-|<|>|\||\/|\]|\[|!|！/g, '') : String(str || '')
     const fMusicName = filterStr(name).toLowerCase()
     const fSinger = filterStr(sortSingle(singer)).toLowerCase()
     const fAlbumName = filterStr(albumName).toLowerCase()
@@ -139,7 +100,7 @@ export const createFallbackSearch = (services: ResourceServices) => {
       (fMusicName.includes(name) || name.includes(fMusicName)) && isEqualsVersionMusicNameChar(name)
     const isIncludesSinger = (singer: string) => (fSinger ? fSinger.includes(singer) || singer.includes(fSinger) : true)
     const isEqualsAlbum = (album: string) => (fAlbumName ? fAlbumName == album : true)
-    // console.log(fMusicName, fSinger, fAlbumName, fInterval)
+
 
     const handleSource = (source: { list: AnyListen.Music.MusicInfoOnline[]; total: number }) => {
       for (const _item of source.list) {
@@ -150,7 +111,7 @@ export const createFallbackSearch = (services: ResourceServices) => {
         item.fMusicName = filterStr(String(item.name ?? '').toLowerCase())
         item.fAlbumName = filterStr(String(item.meta.albumName ?? '').toLowerCase())
         item.fInterval = getIntv(item.interval)
-        // console.log(item.fMusicName, item.fSinger, item.fAlbumName, item.fInterval)
+
         if (!isEqualsInterval(item.fInterval)) {
           item.name = null
           continue
@@ -192,7 +153,7 @@ export const createFallbackSearch = (services: ResourceServices) => {
       }
       newResult.push(...result)
     }
-    // console.log(newResult)
+
     return (newResult as unknown as AnyListen.Music.MusicInfoOnline[])[0] ?? null
   }
   return { musicSearch, findMusic }

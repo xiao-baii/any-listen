@@ -72,19 +72,19 @@ export const createServerPlayer = (send = broadcast, event = getPlayerEvent(), s
     async playerAction(action) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueuePlayer.playerAction(action)
+        return socket.remoteQueuePlayer.playerAction(action)
       })
     },
     async playListAction(action) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueuePlayer.playListAction(action)
+        return socket.remoteQueuePlayer.playListAction(action)
       })
     },
     async playHistoryListAction(action) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueuePlayer.playHistoryListAction(action)
+        return socket.remoteQueuePlayer.playHistoryListAction(action)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

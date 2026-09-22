@@ -29,13 +29,13 @@ export const createServerTheme = (send = broadcast) => {
     async themeChanged(setting) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueueTheme.themeChanged(setting)
+        return socket.remoteQueueTheme.themeChanged(setting)
       })
     },
     async themeListChanged(list) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueueTheme.themeListChanged(list)
+        return socket.remoteQueueTheme.themeListChanged(list)
       })
     },
   } as const satisfies Partial<ExposeServerFunctions>

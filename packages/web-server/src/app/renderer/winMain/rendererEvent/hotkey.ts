@@ -26,7 +26,7 @@ export const createServerHotkey = (send = broadcast) => {
     async hotKeyConfigUpdated(config) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remote.hotKeyConfigUpdated(config)
+        return socket.remote.hotKeyConfigUpdated(config)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

@@ -43,5 +43,9 @@ export const initAccount = async () => {
     account.enabled = true
     account.error = (error as Error).message
   }
+  if (account.user && !location.pathname.startsWith(`/u/${account.user.id}/`)) {
+    location.replace(`/u/${account.user.id}/`)
+    return
+  }
   account.ready = true
 }

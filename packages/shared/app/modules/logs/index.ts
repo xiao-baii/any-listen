@@ -73,7 +73,6 @@ const createLogcat = (logType: AnyListen.LogType) => {
       if (await checkFile(logFile)) {
         await fs.promises.writeFile(logFile, '')
       }
-      log = await createSimpleLogcat(logPath, logName)
     },
   }
 }
@@ -83,8 +82,7 @@ export const logs: Record<AnyListen.LogType, ReturnType<typeof createLogcat>> = 
   ProxyService: createLogcat('ProxyService'),
   WebdavSync: createLogcat('WebdavSync'),
 }
-export const initAppLog = async (dataPath: string) => {
-  const logPath = joinPath(dataPath, LOG_NAMES.LOG_DIR)
+export const initAppLog = async (dataPath: string, logPath = joinPath(dataPath, LOG_NAMES.LOG_DIR)) => {
   await checkAndCreateDir(logPath)
   await logs.App.init(logPath, LOG_NAMES.APP)
   await logs.ExtensionService.init(logPath, LOG_NAMES.EXTENSION_SERVICE)

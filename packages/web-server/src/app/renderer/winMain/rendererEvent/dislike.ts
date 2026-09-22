@@ -24,7 +24,7 @@ export const createServerDislike = (send = broadcast, subscribe = onDislikeActio
     async dislikeAction(action) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueueDislike.dislikeAction(action)
+        return socket.remoteQueueDislike.dislikeAction(action)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

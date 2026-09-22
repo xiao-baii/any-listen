@@ -12,12 +12,12 @@
   $effect(() => { $routeLocation; $routeQuery; showNavigation = false })
 </script>
 
-{#if account.enabled}<div class="mobile-navigation"><button aria-label="歌单导航" aria-expanded={showNavigation} onclick={() => { showNavigation = !showNavigation }}><svg viewBox="0 0 24 24"><use href="#icon-playlist" /></svg></button><span>Any Listen</span><a href="/">{account.user?.username}</a></div>{/if}
+{#if account.enabled}<div class="mobile-navigation"><button aria-label="歌单导航" aria-expanded={showNavigation} onclick={() => { showNavigation = !showNavigation }}><svg viewBox="0 0 24 24"><use href="#icon-playlist" /></svg></button><span>Any Listen</span><a href="#/account">{account.user?.username}</a></div>{/if}
 <div id="app-main" class:show-navigation={showNavigation}>
   <Aside />
   <div id="app-right">
     <Header />
-    {#if account.enabled}<a class="account-link" href="/">{account.user?.username} · 账号管理</a>{/if}
+    {#if account.enabled}<a class="account-link" href="#/account">{account.user?.username} · 账号管理</a>{/if}
     <Main />
   </div>
 </div>

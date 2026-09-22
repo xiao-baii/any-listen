@@ -28,7 +28,7 @@ export const createServerSync = () => {
     async webdavSyncStatus(state) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueueSync.webdavSyncStatus(state)
+        return socket.remoteQueueSync.webdavSyncStatus(state)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

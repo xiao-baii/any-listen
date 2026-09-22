@@ -3,23 +3,13 @@ import fs from 'node:fs'
 
 import { checkAndCreateDir, checkFile, joinPath } from './index'
 
-const logcat = {
-  path: '',
-  // format(type: 'info' | 'error' | 'warn' | 'debug', message: string) {
-  //   return `[${dateFormat(new Date())}] [${type.toUpperCase()}] ${message}\n`
-  // },
-  log(message: string) {
-    fs.appendFile(this.path, `${message}\n`, (error) => {
-      if (error) console.error('write color error:', error)
-    })
-  },
-}
 export const createSimpleLogcat = async (path: string, name: string) => {
-  const instence = Object.create(logcat) as typeof logcat
   await checkAndCreateDir(path)
-  instence.path = joinPath(path, name)
+  const filePath = joinPath(path, name)
   return (message: string) => {
-    instence.log(message)
+    fs.appendFile(filePath, message + '\n', (error) => {
+      if (error) console.error('write log error:', error)
+    })
   }
 }
 

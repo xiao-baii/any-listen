@@ -1,6 +1,9 @@
 import { DEFAULT_LANG, EXTENSION_ENGINE } from '@any-listen/common/constants'
+import { joinPath } from '@any-listen/nodejs'
 
 const empty = {}
+export const getExtensionLogDirectory = (extension: AnyListen.Extension.Extension) =>
+  extensionState.logDir ? joinPath(extensionState.logDir, extension.id) : extension.dataDirectory
 export const extensionState = {
   onlineOnly: false,
   draftOnly: false,
@@ -17,6 +20,7 @@ export const extensionState = {
   configFilePath: '',
   extensionDir: '',
   dataDir: '',
+  logDir: '',
   tempDir: '',
   extensions: [] as AnyListen.Extension.Extension[],
   // prettier-ignore

@@ -18,7 +18,6 @@
     "src/accounts/bootstrap.ts",
     "src/accounts/gateway.ts",
     "src/accounts/runtime.ts",
-    "src/accounts/migration.ts",
     "src/accounts/publications.ts",
     "src/accounts/security.ts",
     "src/accounts/managed.ts"

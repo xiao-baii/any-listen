@@ -111,7 +111,7 @@ export class Publications {
   status() {
     return { version: this.accounts.state('publication') ?? null, running: this.running, message: this.message }
   }
-  async apply(user: User) {
+  async apply() {
     // Every player's resources come from the published version, including the administrator.
     if (this.initialized) return
     this.loading ??= this.loadPublished()

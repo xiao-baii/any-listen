@@ -1,4 +1,5 @@
 import { services, type ResourceServices } from './shared'
+import { logs } from '../logs'
 import { findMusic } from './tools'
 import { allowedUrl, buildExtSourceId, getExtSource } from './utils'
 
@@ -57,7 +58,7 @@ export const createMusicUrls = (
       quality,
       type,
     }).catch(async (e) => {
-      console.error(e)
+      logs.App.logcat.warn(`[Music URL ${source.extensionId}/${source.id}] Source failed; trying alternatives`, e)
       excludeList.push(buildExtSourceId(source.extensionId, source.id))
       return handleGetMusicUrl({ musicInfo, quality, type }, excludeList)
     })

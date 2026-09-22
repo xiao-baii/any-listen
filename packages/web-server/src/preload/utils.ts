@@ -100,9 +100,6 @@ export const parseUrl = (href: string): UrlInfo => {
     href,
   }
 }
-
-export const log = console
-
 export const buildUrlPath = (urlInfo: UrlInfo, path: string, isWS = false) => {
   return `${isWS ? urlInfo.wsProtocol : urlInfo.httpProtocol}//${urlInfo.hostPath}${API_PREFIX}${path}`
 }

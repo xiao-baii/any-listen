@@ -1,7 +1,7 @@
 import { IPC_CODE } from '@any-listen/common/constants'
 
 import handleAuth, { initProxyUrlToken } from './auth'
-import { log, parseUrl } from './utils'
+import { parseUrl } from './utils'
 import type { IPCSocket, KeyInfo, UrlInfo } from './ws'
 import { sendSyncMessage, sendSyncStatus, connect as socketConnect, disconnect as socketDisconnect } from './ws'
 import { wsEvent } from './wsEvent'
@@ -28,7 +28,7 @@ const handleInitProxyUrlToken = (urlInfo: UrlInfo, keyInfo: KeyInfo) => {
 const disconnectServer = async (isResetStatus = true) =>
   handleDisconnect()
     .then(() => {
-      log.info('disconnect...')
+      console.info('disconnect...')
       if (isResetStatus) {
         connectId++
         sendSyncStatus({
@@ -38,7 +38,7 @@ const disconnectServer = async (isResetStatus = true) =>
       }
     })
     .catch((err: Error) => {
-      log.error(`disconnect error: ${err.message}`)
+      console.error(`disconnect error: ${err.message}`)
       sendSyncMessage(err.message)
     })
 

@@ -122,27 +122,32 @@ const userAllowed = new Set([
   'getResourceList',
   'getExtensionList',
 ])
-export const protectRpc = <T extends object>(rpc: T, context: { role: 'admin' | 'user'; run: (action: () => Promise<unknown>) => Promise<unknown> }): T => {
+export const protectRpc = <T extends object>(rpc: T, context: { role: 'admin' | 'user'; run: (action: () => Promise<unknown>) => Promise<unknown>; onError?: (name: string, error: unknown) => void }): T => {
   const actions: Record<string, (...args: any[]) => any> = { ...Object.fromEntries([...alwaysDenied, ...adminOnly].map(name => [name, async () => { throw new Error('Forbidden') }])), ...rpc }
   return Object.fromEntries(
     Object.entries(actions).map(([name, fn]) => [
       name,
       async (...args: unknown[]) => {
-        if (alwaysDenied.has(name) || (context.role !== 'admin' && !userAllowed.has(name)))
-          throw new Error('Forbidden')
-        return context.run(async () => {
-          if (name === 'getExtensionErrorMessage' && context.role !== 'admin') return null
-          if (name === 'getNewVersionInfo' && context.role !== 'admin') return {}
-          if (name === 'getResourceList' && context.role !== 'admin') {
-            const resources = await fn(...args)
-            return { ...resources, commands: [], listProvider: [] }
-          }
-          if (name === 'getExtensionList' && context.role !== 'admin') {
-            const list = (await fn(...args)) as Array<Record<string, unknown>>
-            return list.map(sanitizeExtension)
-          }
-          return await fn(...args)
-        })
+        try {
+          if (alwaysDenied.has(name) || (context.role !== 'admin' && !userAllowed.has(name)))
+            throw new Error('Forbidden')
+          return await context.run(async () => {
+            if (name === 'getExtensionErrorMessage' && context.role !== 'admin') return null
+            if (name === 'getNewVersionInfo' && context.role !== 'admin') return {}
+            if (name === 'getResourceList' && context.role !== 'admin') {
+              const resources = await fn(...args)
+              return { ...resources, commands: [], listProvider: [] }
+            }
+            if (name === 'getExtensionList' && context.role !== 'admin') {
+              const list = (await fn(...args)) as Array<Record<string, unknown>>
+              return list.map(sanitizeExtension)
+            }
+            return await fn(...args)
+          })
+        } catch (error) {
+          context.onError?.(name, error)
+          throw error
+        }
       },
     ])
   ) as T

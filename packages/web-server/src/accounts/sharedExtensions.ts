@@ -40,7 +40,8 @@ export class SharedExtensions {
 
   constructor(
     private entry: string,
-    private root: string
+    private root: string,
+    private logDirectory = path.join(root, 'log', 'extensions')
   ) {}
 
   status() {
@@ -138,6 +139,8 @@ export class SharedExtensions {
         'showSaveBox',
       ].map((name) => [name, () => deny(name)])
     )
+    const startupLogs: string[] = []
+    let checkingStartup = true
     const rpc = createMessage2Call<SourceService>({
       exposeObj: {
         ...denied,
@@ -146,7 +149,10 @@ export class SharedExtensions {
           // Only public presentation data may leave the shared host.
           if (event.action === 'resourceUpdated')
             this.onEvent(this.result({ ...event, data: { ...event.data, commands: [], listProvider: [] } }))
-          else if (event.action === 'logOutput') this.onEvent(this.result(event))
+          else if (event.action === 'logOutput') {
+            if (checkingStartup && event.data.id === 'lx-api-source-loader') startupLogs.push(event.data.message)
+            this.onEvent(this.result(event))
+          }
         },
         createProxyUrl: (url: string, options?: AnyListen.IPCExtension.RequestOptions, cache?: boolean) =>
           this.asset({ url, options, cache }),
@@ -193,7 +199,8 @@ export class SharedExtensions {
       },
     }
     this.host = host
-    worker.on('error', () => {
+    worker.on('error', (error) => {
+      logs.ExtensionService.logcat.error('[Source worker] Failed', error)
       this.failure = 'Public source worker failed'
       rejectReady(new Error(this.failure))
     })
@@ -226,6 +233,7 @@ export class SharedExtensions {
         configFilePath: path.join(directory, EXTENSION.configFileName),
         extensionDir: path.join(directory, EXTENSION.extDirName),
         dataDir: path.join(directory, EXTENSION.dataDirName),
+        logDir: this.logDirectory,
         tempDir: path.join(cache, 'temp'),
         preloadScript: await readFile(path.join(path.dirname(this.entry), 'extension-preload.js'), 'utf8'),
         onlineExtensionHost: defaultSetting['extension.onlineExtensionHost'],
@@ -242,9 +250,14 @@ export class SharedExtensions {
         )
           throw new Error(`Public source requires personal capabilities: ${extension.id}`)
       }
-      await rpc.remote.clearExtensionLogs('lx-api-source-loader')
       await rpc.remote.startExtensions()
-      await verifyManagedExtensions(rpc.remote)
+      await verifyManagedExtensions({
+        getLocalExtensionList: () => rpc.remote.getLocalExtensionList(),
+        getExtensionConfigValues: (id, fields) => rpc.remote.getExtensionConfigValues(id, fields),
+        getExtensionLastLogs: async () => [{ logs: startupLogs.join('\n') }],
+      })
+      checkingStartup = false
+      startupLogs.length = 0
       for (let attempt = 0; ; attempt++) {
         const resources = await rpc.remote.getResourceList()
         const extensions = await rpc.remote.getLocalExtensionList()

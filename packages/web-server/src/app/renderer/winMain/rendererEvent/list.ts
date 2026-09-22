@@ -76,7 +76,7 @@ export const createServerList = (send = broadcast, subscribe = onMusicListAction
     async listAction(action) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueueList.listAction(action)
+        return socket.remoteQueueList.listAction(action)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

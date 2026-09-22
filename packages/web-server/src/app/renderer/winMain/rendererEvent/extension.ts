@@ -112,7 +112,7 @@ export const createServerExtension = () => {
     async extensionEvent(event) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remoteQueueExtension.extensionEvent(event)
+        return socket.remoteQueueExtension.extensionEvent(event)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

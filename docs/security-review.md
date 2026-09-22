@@ -1,6 +1,6 @@
 # Multi-user code review (2026-09-12)
 
-Scope: changes from upstream 80cce020, including gateway authentication, account RPC permissions, media requests, publication, migration and container packaging. This is a focused source review and regression run, not a penetration-test certification.
+Scope: changes from upstream 80cce020, including gateway authentication, account RPC permissions, media requests, publication and container packaging. This is a focused source review and regression run, not a penetration-test certification.
 
 ## Findings Addressed
 
@@ -15,7 +15,7 @@ Scope: changes from upstream 80cce020, including gateway authentication, account
 - Availability: no account/process limit was requested. Authenticated users can keep processes and streams alive; 2 GB may be exhausted. Request volume, password changes, disk growth and extension work are not globally quota-controlled. Deployment still needs resource observation and ingress rate limits.
 - Network compatibility: private-origin exceptions grant every account access to the whole configured origin. Keep them narrowly scoped. The public client selects one validated DNS address; hosts relying on address fallback may need retry or a later connection fallback improvement.
 - Extension readiness relies on the supported LX loader's success log marker. Upgrades must repeat compatibility tests. Publication failure messages are in-memory, while the committed version and audit event are persisted.
-- Migration preserves local paths and reports them but does not make old media mounts usable automatically. Actual production data migration and rollback have not been exercised.
+- The obsolete migration command has been removed; existing migration files are not modified.
 - The full Svelte check has 171 errors / 19 warnings matching the upstream baseline. This is an existing type-check gap, not a clean frontend type check.
 
 ## Verification

@@ -12,17 +12,16 @@ import { SharedDatabase } from './sharedDatabase'
 import { SharedExtensions } from './sharedExtensions'
 import type { DBSeriveTypes } from '@any-listen/app/modules/worker/utils'
 import type { createAccountContext } from './context'
+import { logs } from '@any-listen/app/modules/logs'
 
 export interface Runtime {
   user: User
-  child?: never
   context: Awaited<ReturnType<typeof createAccountContext>>
   port: number
   secret: string
   active: number
   lastActive: number
   busy: number
-  rss: number
   stopping: boolean
   startupMs: number
 }
@@ -57,7 +56,8 @@ export class Runtimes {
     public idleMs = 300_000
   ) {
     configurePublicNetwork(this.allowedMediaOrigins)
-    this.sources = new SharedExtensions(path.join(path.dirname(entry), 'extension-service.worker.js'), this.temporaryRoot)
+    this.sources = new SharedExtensions(path.join(path.dirname(entry), 'extension-service.worker.js'), this.temporaryRoot,
+      path.join(root, '../log/extensions'))
     this.sources.onEvent = (data) => {
       for (const runtime of this.entries.values()) {
         if (runtime.stopping) continue
@@ -100,6 +100,7 @@ export class Runtimes {
     if (failure && failure.until > Date.now()) fail(503, 'Account service is restarting. Try again shortly.')
     const start = this.start(user)
       .catch((error: Error) => {
+        logs.App.logcat.error(`[Account ${user.id}] Initialization failed`, error)
         const count = (this.failures.get(user.id)?.count ?? 0) + 1
         this.failures.set(user.id, {
           count,
@@ -134,13 +135,15 @@ export class Runtimes {
           site: { proxyAllResources: this.proxyAllResources, onlineResourceEnabled: this.onlineResourceEnabled, ghMirrorHosts: this.ghMirrorHosts } })
         context.updateSite({ proxyAllResources: this.proxyAllResources, onlineResourceEnabled: this.onlineResourceEnabled, ghMirrorHosts: this.ghMirrorHosts })
         const runtime: Runtime = { user, context, secret, port: context.port, active: 0, lastActive: Date.now(),
-          get busy() { return context.busy }, rss: 0, stopping: false, startupMs: Math.round(performance.now() - startTime) }
+          get busy() { return context.busy }, stopping: false, startupMs: Math.round(performance.now() - startTime) }
         const closeContext = context.close
         context.close = async () => {
           try { await closeContext() } finally { await channel.close() }
         }
         this.entries.set(user.id, runtime)
-        void channel.closed.catch(() => {
+        logs.App.logcat.info(`[Account ${user.id}] Ready (${runtime.startupMs} ms)`)
+        void channel.closed.catch((error) => {
+          logs.App.logcat.error(`[Account ${user.id}] Database worker failed`, error)
           void this.stop(user.id).catch(() => {})
           const count = (this.failures.get(user.id)?.count ?? 0) + 1
           this.failures.set(user.id, { count, until: Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(count, 6)), message: 'Database worker failed' })
@@ -164,6 +167,10 @@ export class Runtimes {
     if (!runtime) return
     runtime.stopping = true
     try { await runtime.context.close() }
+    catch (error) {
+      logs.App.logcat.error(`[Account ${id}] Shutdown failed`, error)
+      throw error
+    }
     finally { if (this.entries.get(id) === runtime) this.entries.delete(id) }
   }
 
@@ -199,7 +206,6 @@ export class Runtimes {
         userId: r.user.id,
         active: r.active,
         busy: r.busy,
-        rss: r.rss,
         process: process.pid,
         startupMs: r.startupMs,
         stopping: r.stopping,

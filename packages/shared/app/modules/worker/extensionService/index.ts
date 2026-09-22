@@ -60,6 +60,7 @@ const extension = {
     configFilePath: string
     extensionDir: string
     dataDir: string
+    logDir?: string
     tempDir: string
     preloadScript: string
     onlineExtensionHost: string
@@ -77,6 +78,7 @@ const extension = {
     extensionState.configFilePath = state.configFilePath
     extensionState.extensionDir = state.extensionDir
     extensionState.dataDir = state.dataDir
+    extensionState.logDir = state.logDir ?? ''
     extensionState.tempDir = state.tempDir
     extensionState.preloadScript = state.preloadScript
     extensionState.onlineExtensionHost = state.onlineExtensionHost

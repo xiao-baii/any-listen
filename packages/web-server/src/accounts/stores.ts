@@ -7,7 +7,7 @@ export const createAccountStores = (dataPath: string, log: Pick<Console, 'error'
   const stores = new Map<string, Store>()
   let closed = false
   return {
-    get(name: string, isIgnoredError = true, isShowErrorAlert = true): Store {
+    get(name: string): Store {
       if (closed) throw new Error('Account stores are closed')
       if (!/^[a-zA-Z0-9_.-]+$/.test(name) || name === '.' || name === '..') throw new Error('Invalid store name')
       const cached = stores.get(name)
@@ -18,10 +18,9 @@ export const createAccountStores = (dataPath: string, log: Pick<Console, 'error'
         store = new Store(storePath, false)
       } catch (error) {
         log.error(error)
-        if (!isIgnoredError) throw error
         const backupPath = `${storePath}.bak`
         fs.renameSync(storePath, backupPath)
-        if (isShowErrorAlert) log.warn(`${name} data load error; original file saved to ${backupPath}`)
+        log.warn(`${name} data load error; original file saved to ${backupPath}`)
         store = new Store(storePath, true)
       }
       stores.set(name, store)

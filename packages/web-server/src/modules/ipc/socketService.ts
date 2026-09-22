@@ -32,7 +32,7 @@ interface ServerSocketBase extends WS.WebSocket {
   sendMessage: (message: unknown) => void
   onMessage?: (message: string) => void
   onClose: (handler: (err: Error) => void | Promise<void>) => () => void
-  broadcast: (handler: (client: ServerSocket) => void) => void
+  broadcast: (handler: (client: ServerSocket) => void | Promise<void>) => void
 
   // remote: AnyListen.IPC.ServerCommonActions
   // remoteQueueList: AnyListen.IPC.ServerListActions
@@ -63,7 +63,7 @@ export const createSocketService = (
   let closed = false
 
   const winTypes: AnyListen.IPC.WinType[] = ['main', 'desktopLyric'] as const
-  const handleConnection = async (socket: ServerSocket, request: IncomingMessage) => {
+  const handleConnection = (socket: ServerSocket, request: IncomingMessage) => {
     const queryData = new URL(request.url!, host).searchParams
     const winType = queryData.get('t') as AnyListen.IPC.WinType | null
     if (!winType || !winTypes.includes(winType)) {
@@ -107,7 +107,6 @@ export const createSocketService = (
         })
         .catch((err: Error) => {
           appLog.error('decrypt message error:', err)
-          appLog.error(err.message)
           socket.close(IPC_CLOSE_CODE.failed)
         })
     })
@@ -133,7 +132,6 @@ export const createSocketService = (
         })
         .catch((err: Error) => {
           appLog.error('encrypt message error:', err)
-          appLog.error(err.message)
           socket.close(IPC_CLOSE_CODE.failed)
         })
     }
@@ -150,11 +148,9 @@ export const createSocketService = (
         if (index >= 0) closeEvents.splice(index, 1)
       }
     }
-    socket.broadcast = function (handler) {
-      for (const client of wss.clients) handler(client)
-    }
+    socket.broadcast = broadcast
 
-    void handleConnection(socket, request)
+    handleConnection(socket, request)
   })
 
   const unsubscribe = socketEvent.on('remove_session', (id) => {
@@ -169,7 +165,7 @@ export const createSocketService = (
     wss.clients.forEach((socket) => {
       const diff = now - socket.aliveTime
       if (diff > 45_000) {
-        appLog.info('alive check false')
+        appLog.info('[WebSocket] Heartbeat timed out; disconnecting client')
         socket.terminate()
         return
       }
@@ -197,7 +193,7 @@ export const createSocketService = (
       })
   }
   function onSocketError(err: Error) {
-    console.error(err)
+    appLog.error('[WebSocket] Connection error', err)
   }
 
   const onUpgrade = (request: IncomingMessage, socket: Socket, head: Buffer) => {
@@ -218,8 +214,13 @@ export const createSocketService = (
     })
   }
 
-  const broadcast = (handler: (client: ServerSocket) => void) => {
-    for (const client of wss.clients) handler(client)
+  const broadcast = (handler: (client: ServerSocket) => void | Promise<void>) => {
+    for (const client of wss.clients) {
+      void Promise.resolve(handler(client)).catch((error) => {
+        if (client.readyState !== client.OPEN && error instanceof Error && error.message === 'destroy') return
+        appLog.error('[WebSocket] Broadcast failed', error)
+      })
+    }
   }
 
   const getSockets = () => {

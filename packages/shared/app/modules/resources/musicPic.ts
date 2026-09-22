@@ -1,4 +1,5 @@
 import { services, type ResourceServices } from './shared'
+import { logs } from '../logs'
 import { findMusic } from './tools'
 import { allowedUrl, buildExtSourceId, getExtSource } from './utils'
 
@@ -24,10 +25,6 @@ export const createMusicPictures = (
         source,
         name,
         artist,
-      })
-      .then((result) => {
-        // console.log(result)
-        return result
       })
   }
 
@@ -63,13 +60,13 @@ export const createMusicPictures = (
     excludeList: string[] = []
   ): Promise<string> => {
     const source = getExtSource('musicPic', excludeList, musicInfo.meta.source)
-    if (!source) throw new Error('Get url failed, no source')
+    if (!source) throw new Error('No available music picture source')
     return getMusicPicByExtensionSource({
       extensionId: source.extensionId,
       source: source.id,
       musicInfo,
     }).catch(async (e) => {
-      console.error(e)
+      logs.App.logcat.warn(`[Music picture ${source.extensionId}/${source.id}] Source failed; trying alternatives`, e)
       excludeList.push(buildExtSourceId(source.extensionId, source.id))
       return handleGetMusicPic({ musicInfo }, excludeList)
     })

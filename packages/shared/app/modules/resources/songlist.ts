@@ -17,10 +17,6 @@ export const createSonglists = (services: ResourceServices) => {
         extensionId,
         source,
       })
-      .then((result) => {
-        // console.log(result)
-        return result ?? []
-      })
   }
 
   const songlistTags = async ({
@@ -35,13 +31,7 @@ export const createSonglists = (services: ResourceServices) => {
         extensionId,
         source,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          tags: result.tags ?? [],
-          hotTags: result.hotTags ?? [],
-        }
-      })
+      .then(({ tags, hotTags }) => ({ tags, hotTags }))
   }
 
   const songlist = async ({
@@ -68,15 +58,7 @@ export const createSonglists = (services: ResourceServices) => {
         sort,
         tag,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          list: result.list ?? [],
-          total: result.total,
-          limit: result.limit ?? 30,
-          page: result.page ?? 1,
-        }
-      })
+      .then(({ list, total, limit, page }) => ({ list, total, limit, page }))
   }
 
   const songlistSearch = async ({
@@ -109,15 +91,7 @@ export const createSonglists = (services: ResourceServices) => {
         limit,
         page,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          list: result.list ?? [],
-          total: result.total,
-          limit: result.limit ?? 30,
-          page: result.page ?? 1,
-        }
-      })
+      .then(({ list, total, limit, page }) => ({ list, total, limit, page }))
   }
 
   const songlistDetail = async ({
@@ -141,16 +115,7 @@ export const createSonglists = (services: ResourceServices) => {
         limit,
         page,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          list: result.list ?? [],
-          total: result.total,
-          info: result.info,
-          limit: result.limit ?? 30,
-          page: result.page ?? 1,
-        }
-      })
+      .then(({ list, total, info, limit, page }) => ({ list, total, info, limit, page }))
   }
 
   const songlistDetailAll = async (

@@ -129,6 +129,7 @@ export const buildConfig = (target, port = 9200, ipcScript) => {
         //   'view-main': 'index.html',
         // },
         output: {
+          minify: { compress: { dropConsole: true } },
           entryFileNames: '[name]-[hash].js',
           // format: 'cjs',
           // experimentalMinChunkSize: 50_000,
@@ -206,6 +207,7 @@ export const buildConfig = (target, port = 9200, ipcScript) => {
       format: 'iife',
       rolldownOptions: {
         output: {
+          minify: { compress: { dropConsole: true } },
           entryFileNames: '[name]-[hash].js',
           // codeSplitting: true,
           format: 'iife',

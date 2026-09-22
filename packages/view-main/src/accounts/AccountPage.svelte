@@ -11,7 +11,7 @@
   let sessions = $state<Array<{ id: string; userAgent: string; ip: string; createdAt: number }>>([])
   let currentId = $state('')
   let createUsername = $state(''), temporaryPassword = $state(''), resetPassword = $state('')
-  let runtimes = $state<{ gatewayRss?: number; sources?: { workers: number; queued: number; error: string | null }; active: Array<{ userId: string; rss: number; startupMs: number; active: number; busy: number }>; errors: Array<{ userId: string; message: string }> }>({ active: [], errors: [] })
+  let runtimes = $state<{ gatewayRss?: number; sources?: { workers: number; queued: number; error: string | null }; active: Array<{ userId: string; startupMs: number; active: number; busy: number }>; errors: Array<{ userId: string; message: string }> }>({ active: [], errors: [] })
   let publication = $state<{ version: string | null; running: boolean; message: string }>({ version: null, running: false, message: '' })
   let resetId = $state('')
   let backupFile = $state<File | null>(null)
@@ -41,7 +41,7 @@
   })
   const changePassword = () => run(async () => {
     await accountRequest('/password', 'POST', { currentPassword: password, password: newPassword })
-    account.user = null; password = ''; newPassword = ''; message = '密码已修改，请重新登录。'
+    location.assign('/')
   })
   const logout = () => run(async () => { await accountRequest('/logout', 'POST'); location.assign('/') })
   const publish = () => run(async () => {
@@ -59,7 +59,7 @@
   })
 </script>
 
-<main class="account-page">
+<main class="account-page" class:embedded={!!account.user}>
   <header><h1>Any Listen</h1>{#if account.user}<span>{account.user.username}</span><Btn disabled={busy} onclick={logout}>退出登录</Btn>{/if}</header>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
   {#if account.error}<p role="alert" class="error">{account.error}</p>{/if}
@@ -71,7 +71,7 @@
       <Btn rawtype="submit" disabled={busy}>登录</Btn>
     </form></section>
   {:else}
-    <nav><a href={`/u/${account.user.id}/`}>返回播放器</a></nav>
+    <nav><a href="#/library">返回播放器</a></nav>
     <section><h2>修改密码</h2>
       <form onsubmit={(e) => { e.preventDefault(); void changePassword() }}>
         <label>当前密码<Input type="password" bind:value={password} /></label>
@@ -116,7 +116,7 @@
         </section>
         <section><h2>账号运行状态</h2><Btn disabled={busy} onclick={() => run(refresh)}>刷新状态</Btn>
           {#if runtimes.gatewayRss}<p>共享进程：{(runtimes.gatewayRss / 1024 / 1024).toFixed(1)} MiB</p>{/if}
-          {#each runtimes.active as runtime}<p>{users.find((user) => user.id === runtime.userId)?.username}: {runtime.rss ? `${(runtime.rss / 1024 / 1024).toFixed(1)} MiB` : '共享进程'} · 启动 {runtime.startupMs} ms · 连接 {runtime.active} · 任务 {runtime.busy}</p>{/each}
+          {#each runtimes.active as runtime}<p>{users.find((user) => user.id === runtime.userId)?.username}: 共享进程 · 启动 {runtime.startupMs} ms · 连接 {runtime.active} · 任务 {runtime.busy}</p>{/each}
           {#if runtimes.sources?.error}<p class="error">公共音源: {runtimes.sources.error} <Btn disabled={busy} onclick={() => run(async () => { await accountRequest('/publication/retry', 'POST'); await refresh() })}>重载音源</Btn></p>{/if}
           {#each runtimes.errors as item}<p class="error">{users.find((user) => user.id === item.userId)?.username}: {item.message} <Btn disabled={busy} onclick={() => run(async () => { await accountRequest(`/users/${item.userId}/retry`, 'POST'); await refresh() })}>重试启动</Btn></p>{/each}
         </section>
@@ -128,6 +128,7 @@
 
 <style>
   .account-page { box-sizing: border-box; width: 100%; height: 100%; overflow: auto; padding: 24px max(20px, calc((100% - 960px) / 2)); background: #fff; color: #222; font-size: 14px; }
+  .account-page.embedded { position: absolute; inset: 0; }
   header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid #ddd; padding-bottom: 16px; }
   h1 { font-size: 24px; margin: 0 auto 0 0; } h2 { font-size: 17px; margin: 0 0 16px; }
   section { padding: 24px 0; border-bottom: 1px solid #ddd; overflow-wrap: anywhere; } section > a { display: inline-block; margin-bottom: 12px; } nav { padding-top: 20px; } a { color: #17674f; }

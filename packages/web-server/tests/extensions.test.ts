@@ -133,7 +133,6 @@ test(
       } finally { await editor.close() }
       assert.equal(editor.status().workers, 0)
       const adminRuntime = await runtimes.get(admin)
-      assert.equal(adminRuntime.child, undefined)
       const adminLogin = await accounts.login(admin.username, password, '127.0.0.1', 'official-test')
       const adminHeaders = { Cookie: `anylisten_session=${adminLogin.token}`, Origin: origin }
       remoteScript = script.replace('Controlled source', 'HTTP remote source')

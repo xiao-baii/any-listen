@@ -85,7 +85,6 @@ export const init = async (
   // db.exec('VACUUM "main"')
 
   if (!context.managed) process.once('exit', () => { if (db.open) db.close() })
-  console.log('db inited')
   // require('./test')
   return dbFileExists
 }

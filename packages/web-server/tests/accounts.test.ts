@@ -9,7 +9,6 @@ import { pathToFileURL } from 'node:url'
 import { test } from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 
-import Database from 'better-sqlite3'
 import { createMessage2Call } from 'message2call'
 import WebSocket from 'ws'
 import defaultSetting from '../../shared/common/defaultSetting'
@@ -20,7 +19,6 @@ import { isPublicAddress, publicNetworkAgent } from '../../shared/nodejs/publicN
 import { initializeAdmin } from '../src/accounts/bootstrap'
 import { Accounts } from '../src/accounts/database'
 import { createGateway } from '../src/accounts/gateway'
-import { migrate } from '../src/accounts/migration'
 import { snapshotExtensions, Publications } from '../src/accounts/publications'
 import { Runtimes } from '../src/accounts/runtime'
 import { SharedExtensions } from '../src/accounts/sharedExtensions'
@@ -281,7 +279,6 @@ test('concurrent startup shares a process, idle reap and maintenance gate', asyn
     const user = await accounts.create('alice', password, 'user', null)
     const [one, two] = await Promise.all([runtimes.get(user), runtimes.get(user)])
     assert.equal(one, two)
-    assert.equal(one.child, undefined)
     assert.ok(one.context)
     assert.equal(path.relative(dir, runtimes.temporaryRoot).startsWith('..'), true)
     assert((await stat(path.join(runtimes.temporaryRoot, 'users', user.id, 'cache/proxy'))).isDirectory())
@@ -371,32 +368,6 @@ test('revoking a session blocks an administrator request still uploading its bod
     assert.equal(accounts.find('blocked'), undefined)
   } finally {
     await gateway.close()
-    await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('migration preserves database and device data, does not import old sessions, is idempotent', async () => {
-  const dir = await workspace(),
-    destination = path.join(dir, 'new'),
-    source = path.join(dir, 'old')
-  const accounts = new Accounts(destination)
-  try {
-    await mkdir(path.join(source, 'app'), { recursive: true })
-    const old = new Database(path.join(source, 'app', 'data.db'))
-    old.exec("CREATE TABLE lists(id TEXT); INSERT INTO lists VALUES('same-id')")
-    old.close()
-    await writeFile(path.join(source, 'app', 'data.json'), JSON.stringify({ machineId: 'unchanged', filePath: '/old/music.mp3' }))
-    await writeFile(path.join(source, 'tokens.json'), 'old token')
-    const admin = await accounts.create('admin', password, 'admin', null)
-    await migrate(accounts, destination, admin.id, source)
-    await migrate(accounts, destination, admin.id, source)
-    const target = path.join(destination, 'users', admin.id)
-    assert.equal(JSON.parse(await readFile(path.join(target, 'app', 'data.json'), 'utf8')).machineId, 'unchanged')
-    assert.equal(JSON.parse(await readFile(path.join(target, 'migration-report.json'), 'utf8')).warnings.length, 1)
-    await assert.rejects(readFile(path.join(target, 'tokens.json')))
-    assert.equal(await readFile(path.join(source, 'tokens.json'), 'utf8'), 'old token')
-  } finally {
-    accounts.close()
     await rm(dir, { recursive: true, force: true })
   }
 })
@@ -589,6 +560,14 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
       bRpc = await rpc(bob, bEvents)
     const adminEvents: any[] = []
     const adminRpc = await rpc(admin, adminEvents)
+    const extraClient = await rpc(alice, [])
+    const extraSocket = sockets.at(-1)!
+    assert(await extraClient.remote.getPlayInfo())
+    const extraClosed = once(extraSocket, 'close')
+    extraSocket.close()
+    await extraClosed
+    assert(await aRpc.remote.getPlayInfo(), 'Closing one connection must preserve sibling connections')
+    assert(await bRpc.remote.getPlayInfo(), 'Closing Alice connection must preserve Bob connection')
     for (const type of ['App', 'ExtensionService', 'ProxyService', 'WebdavSync'] as const) {
       const marker = `admin-log-check-${type}`
       logs[type].logcat.info(marker)
@@ -598,10 +577,17 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
       assert.match(await adminRpc.remote.getAppLogs(type), new RegExp(marker))
       await adminRpc.remote.clearAppLog(type)
       assert.equal(await adminRpc.remote.getAppLogs(type), '')
+      logs[type].logcat.info(`${marker}-after-clear`)
+      assert.match(await adminRpc.remote.getAppLogs(type), new RegExp(`${marker}-after-clear`))
     }
     for (let attempt = 0; attempt < 50 && !adminEvents.some(event => event.action === 'appLog'); attempt++) await delay(20)
     assert(adminEvents.some(event => event.action === 'appLog' && event.log.includes('admin-log-check-')))
     assert(!aEvents.some((event: any) => event.action === 'appLog'))
+    await assert.rejects(aRpc.remote.fileSystemAction({ action: 'log-test-private-argument' }), /Forbidden/)
+    const appLogs = await adminRpc.remote.getAppLogs('App')
+    assert.match(appLogs, /\d{4}-\d{2}-\d{2} .* ERROR \[Account .*\] \[RPC fileSystemAction\] Failed/)
+    assert(!appLogs.includes('log-test-private-argument'), 'RPC arguments must not be logged')
+    assert.match(appLogs, /Forbidden/)
     const logEvent = { value: { action: 'logOutput', data: { id: 'lx-api-source-loader', name: 'Loader',
       type: 'info', timestamp: Date.now(), message: 'Administrator source log' } }, assets: {} }
     await (await runtimes.get(admin.user)).context.sourceEvent(logEvent)
@@ -609,7 +595,6 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     for (let attempt = 0; attempt < 50 && !adminEvents.some(event => event.action === 'logOutput'); attempt++) await delay(20)
     assert(adminEvents.some(event => event.action === 'logOutput'))
     assert(!aEvents.some((event: any) => event.action === 'logOutput'), 'Source logs are not broadcast to ordinary accounts')
-    assert.equal((await runtimes.get(admin.user)).child, undefined)
     assert.equal(runtimes.status().topology, 'single-process-shared-workers')
     assert.equal(new Set(runtimes.status().active.map(runtime => runtime.process)).size, 1)
     assert.equal((await api('/account-api/source-script', alice.cookie, 'POST', {})).status, 403)
@@ -774,8 +759,6 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     assert.deepEqual(await a2Rpc.remote.getSearchHistoryList(), ['Alice private search'])
     assert.deepEqual((await bRpc.remote.getSearchHistoryList()) ?? [], [])
     const aRuntime = runtimes.entries.get(alice.user.id)!, bRuntime = runtimes.entries.get(bob.user.id)!
-    assert.equal(aRuntime.child, undefined)
-    assert.equal(bRuntime.child, undefined)
     assert.ok(aRuntime.context && bRuntime.context)
     assert.deepEqual(runtimes.status().database, { workers: 1, channels: runtimes.entries.size })
     const theme = structuredClone((await aRpc.remote.getThemeList()).themes[0])
@@ -799,6 +782,12 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     await bRpc.remote.setMusicLyric(lyricSong.id, { ...lyric, lyric: '[00:01]Bob private lyric' })
     assert.equal((await a2Rpc.remote.getMusicLyric({ musicInfo: lyricSong })).info.lyric, lyric.lyric)
     assert.equal((await bRpc.remote.getMusicLyric({ musicInfo: lyricSong })).info.lyric, '[00:01]Bob private lyric')
+    const simplified = { ...lyric, lyric: '[00:01]音乐' }
+    await aRpc.remote.setMusicLyric(lyricSong.id, simplified)
+    await aRpc.remote.setSetting({ 'player.isS2t': true })
+    assert.equal((await aRpc.remote.getMusicLyric({ musicInfo: lyricSong })).info.lyric, '[00:01]音樂')
+    await aRpc.remote.setSetting({ 'player.isS2t': false })
+    assert.equal((await aRpc.remote.getMusicLyric({ musicInfo: lyricSong })).info.lyric, simplified.lyric)
     await aRpc.remote.listAction({ action: 'list_music_remove', data: { listId: 'default', ids: ['same-song-id'] } })
     assert.equal((await a2Rpc.remote.getListMusics('default')).length, 0)
     assert.equal((await bRpc.remote.getListMusics('default')).length, 1)
@@ -896,7 +885,7 @@ test('publication rollback restores switched accounts and releases the maintenan
   const publications = new Publications(accounts, runtimes)
   let sourceVersion: string | undefined
   runtimes.sources.switch = async (version) => { sourceVersion = version }
-  runtimes.prepare = (user) => publications.apply(user)
+  runtimes.prepare = () => publications.apply()
   try {
     const admin = await accounts.create('admin', password, 'admin', null)
     const alice = await accounts.create('alice', password, 'user', admin.id)
@@ -921,7 +910,7 @@ test('publication rollback restores switched accounts and releases the maintenan
     assert.equal(sourceVersion, previous)
     let failOnce = true
     runtimes.prepare = async (user) => {
-      await publications.apply(user)
+      await publications.apply()
       if (user.id === bob.id && failOnce) {
         failOnce = false
         throw new Error('Injected rollout failure')
@@ -951,7 +940,7 @@ test(
       accounts = new Accounts(dir)
     const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
     const publications = new Publications(accounts, runtimes)
-    runtimes.prepare = (user) => publications.apply(user)
+    runtimes.prepare = (user) => publications.apply()
     const sockets: WebSocket[] = []
     try {
       const admin = await accounts.create('admin', password, 'admin', null)
@@ -1072,7 +1061,7 @@ test(
       const restarted = new Runtimes(dir, path.join(root, 'build/server/index.js'))
       try {
         const publication = new Publications(accounts, restarted)
-        restarted.prepare = (account) => publication.apply(account)
+        restarted.prepare = () => publication.apply()
         await restarted.get(user)
         assert.equal(restarted.sources.status().version, previous)
         assert.equal(restarted.sources.status().workers, 1)

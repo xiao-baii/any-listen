@@ -10,7 +10,7 @@ import { createExposeDislike, createServerDislike } from './dislike'
 import { createExposeExtension, createServerExtension } from './extension'
 import { createExposeHotkey, createServerHotkey } from './hotkey'
 import { createExposeList, createServerList } from './list'
-import { createExposeMusic } from './music'
+import { createExposeMusic, createExposeLocalMusic } from './music'
 import { createExposePlayer, createServerPlayer } from './player'
 import { createExposeResource } from './resource'
 import { createExposeSoundEffect } from './soundEffect'
@@ -57,6 +57,7 @@ export const init = () => {
     ...createExposeHotkey(),
     ...createExposeList(),
     ...createExposeMusic(),
+    ...createExposeLocalMusic(),
     ...createExposeResource(),
     ...createExposeDislike(),
     ...createExposeTheme(),
@@ -68,7 +69,7 @@ export const init = () => {
   connectRenderer(socketEvent, exposeObj)
 }
 
-export const connectRenderer = (events: typeof socketEvent, exposeObj: Record<string, (...args: any[]) => any>) => {
+export const connectRenderer = (events: typeof socketEvent, exposeObj: Record<string, (...args: any[]) => any>, logger: Pick<Console, 'error'> = appLog) => {
   return events.on('new_socket', (socket) => {
     if (socket.winType != 'main') return
     const msg2call = createMessage2Call<AnyListen.IPC.ClientCommonActions>({
@@ -85,7 +86,7 @@ export const connectRenderer = (events: typeof socketEvent, exposeObj: Record<st
         const name = groupName ?? ''
         // const userName = socket.userInfo?.name ?? ''
         // const deviceName = socket.keyInfo?.deviceName ?? ''
-        appLog.error(`call ${name} ${path.join('.')} error:`, error)
+        if (path[0] !== 'appLog') logger.error(`[Client RPC ${name} ${path.join('.')}] Failed`, error)
         // if (groupName == null) return
         // // TODO
         // socket.close(IPC_CLOSE_CODE.failed)

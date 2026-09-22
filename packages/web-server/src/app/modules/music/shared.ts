@@ -5,7 +5,7 @@ import { workers as defaultWorkers } from '@any-listen/app/modules/worker'
 
 export const createMusicCache = (
   appState: typeof defaultAppState,
-  workers: Pick<typeof defaultWorkers, 'dbService' | 'utilService'>
+  workers: { dbService: typeof defaultWorkers.dbService; utilService: Pick<typeof defaultWorkers.utilService, 'lyricS2T'> }
 ) => {
   const getCachedLyricInfo = async (musicInfo: AnyListen.Music.MusicInfo): Promise<AnyListen.Music.LyricInfo | null> => {
     let lrcInfo = await workers.dbService.getPlayerLyric(musicInfo.id)

@@ -20,10 +20,6 @@ export const createTopSongs = (services: ResourceServices) => {
         source,
         id,
       })
-      .then((result) => {
-        // console.log(result)
-        return result ?? []
-      })
   }
 
   const topSongs = async ({
@@ -37,10 +33,6 @@ export const createTopSongs = (services: ResourceServices) => {
       .resourceAction('topSongs', {
         extensionId,
         source,
-      })
-      .then((result) => {
-        // console.log(result)
-        return result ?? []
       })
   }
 
@@ -68,16 +60,7 @@ export const createTopSongs = (services: ResourceServices) => {
         limit,
         page,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          list: result.list ?? [],
-          total: result.total,
-          limit: result.limit ?? 30,
-          page: result.page ?? 1,
-          info: result.info,
-        }
-      })
+      .then(({ list, total, limit, page, info }) => ({ list, total, limit, page, info }))
   }
 
   const topSongsDetailAll = async (

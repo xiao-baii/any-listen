@@ -1,7 +1,7 @@
 import { IPC_CODE } from '@any-listen/common/constants'
 
 import { getAuthKey, setAuthKey } from './data'
-import { buildIPCUrlPath, buildUrlPath, log, request, toSha256 } from './utils'
+import { buildIPCUrlPath, buildUrlPath, request, toSha256 } from './utils'
 import type { KeyInfo, UrlInfo } from './ws'
 
 // const hello = async(urlInfo: UrlInfo) => request(`${urlInfo.httpProtocol}//${urlInfo.hostPath}/${API_PREFIX}/hello`)
@@ -20,7 +20,7 @@ import type { KeyInfo, UrlInfo } from './ws'
 //     return false
 //   })
 //   .catch((err: any) => {
-//     log.error('[auth] hello', err.message)
+//     console.error('[auth] hello', err.message)
 //     console.log(err)
 //     return false
 //   })
@@ -36,7 +36,7 @@ const getServerId = async (urlInfo: UrlInfo) =>
       return text.replace(IPC_CODE.idPrefix, '')
     })
     .catch((err: Error) => {
-      log.error('[auth] getServerId', err.message)
+      console.error('[auth] getServerId', err.message)
       console.log(err)
       throw err
     })

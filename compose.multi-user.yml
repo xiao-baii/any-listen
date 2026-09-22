@@ -14,5 +14,6 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - ./data:/server/data
+      - ./log:/server/log
     restart: unless-stopped
     stop_grace_period: 30s

@@ -1,3 +1,4 @@
+import { getExtensionLogDirectory } from '../state'
 import { EXTENSION } from '@any-listen/common/constants'
 import { logFormat } from '@any-listen/common/tools'
 import { dateFormat, generateId } from '@any-listen/common/utils'
@@ -7,7 +8,7 @@ import { extensionEvent } from '../event'
 import type { createCommon } from '../extensionApis/common'
 
 export const createLogTools = async (extension: AnyListen.Extension.Extension) => {
-  const log = await createSimpleLogcat(extension.dataDirectory, EXTENSION.logFileName)
+  const log = await createSimpleLogcat(getExtensionLogDirectory(extension), EXTENSION.logFileName)
   const sendLog = (type: AnyListen.ExtensionVM.HostCallActions['logcat']['type'], messages: unknown[]) => {
     const info = {
       type,

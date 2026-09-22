@@ -1,7 +1,5 @@
-import { dateFormat } from '@/shared'
 import { extensionEvent as extensionEventRemote } from '@/shared/ipc/extension/event'
 
-import { extI18n } from '../i18n'
 import * as commit from './commit'
 import { extensionEvent } from './event'
 
@@ -36,7 +34,6 @@ export const registerRemoteExtensionEvent = () => {
     // commit.setExtensionRuning(id, loadTimestamp)
   }
   return extensionEventRemote.on((action): void => {
-    console.log('onExtensionEvent', action)
     switch (action.action) {
       case 'listSet':
         commit.setList(action.data)
@@ -87,11 +84,6 @@ export const registerRemoteExtensionEvent = () => {
         console.error('[ExtensionHost]', action.data)
         break
       case 'logOutput':
-        console[action.data.type == 'info' ? 'log' : action.data.type](
-          '[ExtensionHost]',
-          `[${dateFormat(action.data.timestamp)} ${action.data.id}(${extI18n.t(action.data.id, action.data.name)})]`,
-          action.data.message
-        )
         extensionEvent.logOutput(action.data)
         break
       case 'resourceUpdated':

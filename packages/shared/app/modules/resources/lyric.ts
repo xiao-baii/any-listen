@@ -1,4 +1,5 @@
 import { isValidLyric } from '@any-listen/common/tools'
+import { logs } from '../logs'
 
 import { services, type ResourceServices } from './shared'
 import { findMusic } from './tools'
@@ -32,10 +33,6 @@ export const createLyrics = (
         artist,
         interval,
       })
-      .then((result) => {
-        // console.log(result)
-        return result
-      })
   }
   const getLyric = async ({
     extensionId,
@@ -51,10 +48,6 @@ export const createLyrics = (
         extensionId,
         source,
         id,
-      })
-      .then((result) => {
-        // console.log(result)
-        return result
       })
   }
 
@@ -89,13 +82,13 @@ export const createLyrics = (
     excludeList: string[] = []
   ): Promise<AnyListen.Music.LyricInfo> => {
     const source = getExtSource('musicLyric', excludeList, musicInfo.meta.source)
-    if (!source) throw new Error('Get url failed, no, source')
+    if (!source) throw new Error('No available lyric source')
     return getMusicLyricByExtensionSource({
       extensionId: source.extensionId,
       source: source.id,
       musicInfo,
     }).catch(async (e) => {
-      console.error(e)
+      logs.App.logcat.warn(`[Lyrics ${source.extensionId}/${source.id}] Source failed; trying alternatives`, e)
       excludeList.push(buildExtSourceId(source.extensionId, source.id))
       return handleGetMusicLyric({ musicInfo }, excludeList)
     })

@@ -1,4 +1,5 @@
 export const LOCAL_STORE_KEYS = {
+  mediaDeviceId: 'media_device_id',
   windowInfo: 'window_info',
   updateDownloadFailedTip: 'update__download_failed_tip',
   updateCheckFailedTip: 'update__check_failed_tip',

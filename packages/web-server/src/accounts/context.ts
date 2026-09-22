@@ -12,7 +12,7 @@ import { createOnlineListSync } from '@any-listen/app/modules/musicList/onlineSy
 import { createProxyService } from '@any-listen/app/modules/proxyServer'
 import { clearCache, getCacheSize } from '@any-listen/app/modules/proxyServer/shared'
 import { createResources } from '@any-listen/app/modules/resources/service'
-import type { DBSeriveTypes, ExtensionSeriveTypes, UtilSeriveTypes } from '@any-listen/app/modules/worker/utils'
+import type { DBSeriveTypes, ExtensionSeriveTypes } from '@any-listen/app/modules/worker/utils'
 import { createCache } from '@any-listen/common/cache'
 import { API_PREFIX, DEFAULT_LANG, PROXY_SERVER_PATH, PROXY_URL_PATH, STORE_NAMES } from '@any-listen/common/constants'
 import { getMimeType } from '@any-listen/common/mime'
@@ -62,9 +62,9 @@ export const createAccountContext = async (options: {
   database: DBSeriveTypes
   sources: SharedExtensions
   site: SiteSettings
-  role?: 'admin' | 'user'
-  workerEntry?: string
-  allowedOrigins?: string[]
+  role: 'admin' | 'user'
+  workerEntry: string
+  allowedOrigins: string[]
 }) => {
   const { id, database, sources } = options
   const state = createAppState()
@@ -74,7 +74,12 @@ export const createAccountContext = async (options: {
   state.version.version = version
   state.machineId = id
   await Promise.all([state.dataPath, state.cacheDataPath, state.tempDataPath].map(dir => mkdir(dir, { recursive: true })))
-  const stores = createAccountStores(state.dataPath, console)
+  const logger = {
+    info: (...args: unknown[]) => logs.App.logcat.info(`[Account ${id}]`, ...args),
+    warn: (...args: unknown[]) => logs.App.logcat.warn(`[Account ${id}]`, ...args),
+    error: (...args: unknown[]) => logs.App.logcat.error(`[Account ${id}]`, ...args),
+  }
+  const stores = createAccountStores(state.dataPath, logger)
   const event = new Event()
   const appEvent = event as EventType<Event>
   const pending = new Set<Promise<unknown>>()
@@ -95,9 +100,9 @@ export const createAccountContext = async (options: {
     const auth = identity(req)
     if (!auth) throw new Error('Unauthorized')
     return { clientId: auth.sessionId, timestamp: Date.now() }
-  }, () => {}, console, 1012)
-  const broadcast = (action: (socket: ServerSocket) => void) => sockets.broadcast(socket => {
-    if (socket.winType === 'main' && socket.isInited && socket.readyState === socket.OPEN) action(socket)
+  }, () => {}, logger, 1012)
+  const broadcast = (action: (socket: ServerSocket) => void | Promise<void>) => sockets.broadcast(socket => {
+    if (socket.winType === 'main' && socket.isInited && socket.readyState === socket.OPEN) return action(socket)
   })
   const settings = (input?: Partial<AnyListen.AppSetting>, notify = true) => {
     const result = mergeSetting(state.appSetting, { ...input,
@@ -109,7 +114,7 @@ export const createAccountContext = async (options: {
     state.appSetting = result.setting
     if (notify && result.updatedSettingKeys.length) {
       appEvent.updated_config(result.updatedSettingKeys, result.updatedSetting)
-      broadcast(socket => { void socket.remote.settingChanged(result.updatedSettingKeys, result.updatedSetting).catch(() => {}) })
+      broadcast(socket => socket.remote.settingChanged(result.updatedSettingKeys, result.updatedSetting))
     }
   }
   settings(stores.get(STORE_NAMES.APP_SETTINGS).get<Partial<AnyListen.AppSetting>>('setting') ?? undefined, false)
@@ -119,8 +124,8 @@ export const createAccountContext = async (options: {
   const proxy = createProxyService()
   const files = createCache<string>({ max: 256 })
   const draft = options.role === 'admin' ? createDraftExtensions({
-    entry: options.workerEntry!, directory: path.join(state.dataPath, 'extension'),
-    origins: options.allowedOrigins ?? [], mirrors: () => site.ghMirrorHosts,
+    entry: options.workerEntry, directory: path.join(state.dataPath, 'extension'),
+    origins: options.allowedOrigins, mirrors: () => site.ghMirrorHosts,
     locale: () => state.appSetting['common.langId'] ?? DEFAULT_LANG,
     icon: file => {
       const name = randomUUID() + path.extname(file)
@@ -145,16 +150,12 @@ export const createAccountContext = async (options: {
   })
   const resourceState = { resources: {} as AnyListen.Extension.ResourceList['resources'] }
   const resources = createResources(extension, resourceState)
-  const utilService = new Proxy({} as UtilSeriveTypes, {
-    get(_target, name) {
-      if (name === 'then' || typeof name !== 'string') return undefined
-      return async (...args: unknown[]) => {
-        if (!['lyricS2T', 'langS2T', 'langT2S'].includes(name)) throw new Error('Local tools are unavailable')
-        const service = await import('@any-listen/app/modules/worker/utilService/common')
-        return (service[name as keyof typeof service] as (...args: unknown[]) => unknown)(...structuredClone(args))
-      }
+  const utilService = {
+    async lyricS2T(info: AnyListen.Music.LyricInfo) {
+      const { lyricS2T } = await import('@any-listen/app/modules/worker/utilService/common')
+      return lyricS2T(structuredClone(info))
     },
-  })
+  }
   const workers = { dbService: database, extensionService: extension, utilService }
   const music = createOnlineMusic(state, workers, resources)
   const lists = createMusicList(database,
@@ -164,7 +165,7 @@ export const createAccountContext = async (options: {
     if (list.meta.sourceType === 'songlist') return resources.songlistDetailAll(list.meta.extensionId, list.meta.source, list.meta.syncId)
     if (list.meta.sourceType === 'topSongs') return resources.topSongsDetailAll(list.meta.extensionId, list.meta.source, list.meta.syncId, String(list.meta.date ?? ''))
     throw new Error('Unsupported online list source')
-  }, async list => { await database.updateUserLists([list]) }, console.error)
+  }, async list => { await database.updateUserLists([list]) }, error => logger.error('[List sync] Failed', error))
   const player = createPlayerModule(state, appEvent, database, lists.musicListEvent, lists.sendMusicListAction, true)
   const server = http.createServer()
   const close = async () => {
@@ -212,7 +213,7 @@ export const createAccountContext = async (options: {
       ...createExposePlayer(player, true), ...createExposeTheme(theme), ...createExposeHotkey(hotkey),
       ...createExposeDislike(dislike), ...createExposeData(stores.get, state, ver => { state.version.ignoreVersion = ver }),
       ...createExposeSoundEffect(stores.get), ...createExposeResource(resources),
-      ...createExposeMusic({ ...music, getMusicPic: music.getMusicPicUrl }, workers, state),
+      ...createExposeMusic({ ...music, getMusicPic: music.getMusicPicUrl }, database),
       ...createExposeList({ ...lists, getListsCover: ids => lists.getListsCover(ids, music.getMusicPicUrl),
         syncUserList: async id => {
           const list = (await lists.getAllUserLists()).userList.find(list => list.id === id)
@@ -229,7 +230,7 @@ export const createAccountContext = async (options: {
         if ('common.langId' in allowed) {
           const data = draft ? await draft.call('getLocalExtensionList', []) as AnyListen.Extension.Extension[]
             : (await extension.getLocalExtensionList()).map(item => sanitizeExtension(item) as AnyListen.Extension.Extension)
-          broadcast(socket => { void socket.remoteQueueExtension.extensionEvent({ action: 'listSet', data }).catch(() => {}) })
+          broadcast(socket => socket.remoteQueueExtension.extensionEvent({ action: 'listSet', data }))
         }
       },
       async setSystemThemeMode(_socket: ServerSocket, dark: boolean) {
@@ -261,12 +262,12 @@ export const createAccountContext = async (options: {
     ].map(name => [name, async (_socket: ServerSocket, ...args: unknown[]) => {
       const result = await draft.call(name, args)
       if (name === 'updateExtensionSettings') {
-        broadcast(socket => { void socket.remoteQueueExtension.extensionEvent({ action: 'extenstionSettingUpdated',
-          data: { id: args[0] as string, keys: Object.keys(args[1] as object), setting: args[1] as Record<string, unknown> } }).catch(() => {}) })
+        broadcast(socket => socket.remoteQueueExtension.extensionEvent({ action: 'extenstionSettingUpdated',
+          data: { id: args[0] as string, keys: Object.keys(args[1] as object), setting: args[1] as Record<string, unknown> } }))
       }
       if (['installExtension', 'updateExtension', 'enableExtension', 'disableExtension', 'uninstallExtension'].includes(name)) {
         const data = await draft.call('getLocalExtensionList', []) as AnyListen.Extension.Extension[]
-        broadcast(socket => { void socket.remoteQueueExtension.extensionEvent({ action: 'listSet', data }).catch(() => {}) })
+        broadcast(socket => socket.remoteQueueExtension.extensionEvent({ action: 'listSet', data }))
       }
       return result
     }])) : {}
@@ -281,9 +282,15 @@ export const createAccountContext = async (options: {
     if (draft) subscriptions.push(appLogEvent.on('logOutput', (type, log) => {
       broadcast(socket => { void socket.remote.appLog(type, log).catch(() => {}) })
     }))
-    subscriptions.push(connectRenderer(socketEvent, protectRpc({ ...expose, ...adminExpose }, { role: options.role ?? 'user', run })))
+    const rpc = protectRpc({ ...expose, ...adminExpose }, {
+      role: options.role, run,
+      onError(name, error) {
+        if (!closed && name !== 'getAppLogs' && name !== 'clearAppLog') logger.error(`[RPC ${name}] Failed`, error)
+      },
+    })
+    subscriptions.push(connectRenderer(socketEvent, rpc, logger))
     const app = new Koa()
-    app.on('error', () => {})
+    app.on('error', error => logger.error('[HTTP] Request failed', error))
     app.use(async (ctx, next) => {
       if (!identity(ctx.req)) { ctx.status = 401; return }
       ctx.set('Cache-Control', 'private, no-store')
@@ -324,7 +331,7 @@ export const createAccountContext = async (options: {
     })
     appEvent.inited()
     sync.start()
-    void sync.syncAllList().catch(console.error)
+    void sync.syncAllList().catch(error => logger.error('[List sync] Failed', error))
     return {
       port: (server.address() as { port: number }).port,
       get busy() { return pending.size + sourceCalls + Number(sync.isSyncing()) + proxy.state.activeWriteStreams.size },
@@ -340,7 +347,7 @@ export const createAccountContext = async (options: {
         if (event.action === 'logOutput' && options.role !== 'admin') return
         if (event.action === 'resourceUpdated') resourceState.resources = event.data.resources
         if (closed) return
-        broadcast(socket => { void socket.remoteQueueExtension.extensionEvent(event).catch(() => {}) })
+        broadcast(socket => socket.remoteQueueExtension.extensionEvent(event))
       },
       close,
     }

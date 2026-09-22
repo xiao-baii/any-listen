@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-condition */
-import { SINGERS_RXP } from '@any-listen/common/constants'
+import { sortSingle, getIntv, trimStr, filterStr } from './search/normalize'
 
 import { services, type ResourceServices } from './shared'
 
@@ -19,7 +19,7 @@ export const createMusicSearch = (services: ResourceServices) => {
     page: number
     limit?: number
   }): Promise<AnyListen.IPCResource.MusicListResult> => {
-    // console.log(extensionId, source, artist, page, limit)
+
     if (!name.trim().length) {
       return {
         list: [],
@@ -37,15 +37,7 @@ export const createMusicSearch = (services: ResourceServices) => {
         limit,
         page,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          list: result.list ?? [],
-          total: result.total,
-          limit: result.limit ?? 30,
-          page: result.page ?? 1,
-        }
-      })
+      .then(({ list, total, limit, page }) => ({ list, total, limit, page }))
   }
 
   type FindMusicType = Omit<AnyListen.Music.MusicInfoOnline, 'name'> & {
@@ -87,15 +79,6 @@ export const createMusicSearch = (services: ResourceServices) => {
     })
     if (!list) return null
 
-    const sortSingle = (singer?: string) =>
-      typeof singer == 'string' && SINGERS_RXP.test(singer)
-        ? singer
-            .split(SINGERS_RXP)
-            .map((s) => s.trim())
-            .filter((s) => s)
-            .sort((a, b) => a.localeCompare(b))
-            .join('、')
-        : singer || ''
     const sortMusic = (arr: FindMusicType[], callback: (item: FindMusicType) => boolean) => {
       const tempResult = []
       for (let i = arr.length - 1; i > -1; i--) {
@@ -112,22 +95,6 @@ export const createMusicSearch = (services: ResourceServices) => {
       tempResult.reverse()
       return tempResult
     }
-    const getIntv = (interval?: string | number | null) => {
-      if (!interval) return 0
-      if (typeof interval === 'number') return interval
-      // if (musicInfo._interval) return musicInfo._interval
-      const intvArr = interval.split(':')
-      let intv = 0
-      let unit = 1
-      while (intvArr.length) {
-        intv += parseInt(intvArr.pop()!) * unit
-        unit *= 60
-      }
-      return intv
-    }
-    const trimStr = (str?: string) => (typeof str == 'string' ? str.trim() : str || '')
-    const filterStr = (str?: string) =>
-      typeof str == 'string' ? str.replace(/\s|'|\.|,|，|&|"|、|\(|\)|（|）|`|~|-|<|>|\||\/|\]|\[|!|！/g, '') : String(str || '')
     const fMusicName = filterStr(name).toLowerCase()
     const fSinger = filterStr(sortSingle(singer)).toLowerCase()
     const fAlbumName = filterStr(albumName).toLowerCase()
@@ -146,7 +113,7 @@ export const createMusicSearch = (services: ResourceServices) => {
         item.fMusicName = filterStr(String(item.name ?? '').toLowerCase())
         item.fAlbumName = filterStr(String(item.meta.albumName ?? '').toLowerCase())
         item.fInterval = getIntv(item.interval)
-        // console.log(fMusicName, item.fMusicName, item.source)
+
         if (!isEqualsInterval(item.fInterval)) {
           item.name = null
           continue
@@ -188,7 +155,7 @@ export const createMusicSearch = (services: ResourceServices) => {
       }
       newResult.push(...result)
     }
-    // console.log(newResult)
+
     return (newResult as unknown as AnyListen.Music.MusicInfoOnline[])[0] ?? null
   }
   return { musicSearch, findMusic }

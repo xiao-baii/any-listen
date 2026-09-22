@@ -4,6 +4,7 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import path from 'node:path'
 import { formatExtensionGHMirrorHosts } from '@any-listen/common/tools'
+import { logs } from '@any-listen/app/modules/logs'
 
 import { Accounts, publicUser, type User, type Session } from './database'
 import { Publications } from './publications'
@@ -56,7 +57,7 @@ type Auth = { user: User; session: Session }
 
 export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir: string, configuredOrigin?: string) => {
   const limiter = new LoginLimiter()
-  const connections = new Map<string, Set<Socket | ServerResponse>>()
+  const connections = new Map<string, { userId: string; connections: Set<Socket | ServerResponse> }>()
   const publications = new Publications(accounts, runtimes)
   const siteSettings = () => ({ proxyAllResources: runtimes.proxyAllResources, onlineResourceEnabled: runtimes.onlineResourceEnabled, ghMirrorHosts: runtimes.ghMirrorHosts })
   runtimes.setSiteSettings({
@@ -66,7 +67,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
   })
   runtimes.prepare = (user) => {
     if (!accounts.get(user.id) || accounts.get(user.id)!.disabled) fail(403, 'Account disabled')
-    return publications.apply(user)
+    return publications.apply()
   }
   const originFor = (req: IncomingMessage) => configuredOrigin ?? `http://${req.headers.host}`
   const authFor = (req: IncomingMessage): Auth => accounts.session(cookieToken(req)) ?? fail(401, 'Sign in required')
@@ -76,8 +77,9 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
       `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token ? 30 * 86400 : 0}${originFor(req).startsWith('https:') ? '; Secure' : ''}`
     )
   const track = (auth: Auth, connection: Socket | ServerResponse, runtime?: Runtime) => {
-    const set = connections.get(auth.session.id) ?? new Set<Socket | ServerResponse>()
-    connections.set(auth.session.id, set)
+    const entry = connections.get(auth.session.id) ?? { userId: auth.user.id, connections: new Set<Socket | ServerResponse>() }
+    connections.set(auth.session.id, entry)
+    const set = entry.connections
     set.add(connection)
     if (runtime) {
       runtime.active++
@@ -85,10 +87,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     }
     connection.once('close', () => {
       set.delete(connection)
-      if (!set.size) {
-        connections.delete(auth.session.id)
-        owners.delete(auth.session.id)
-      }
+      if (!set.size) connections.delete(auth.session.id)
       if (runtime) {
         runtime.active--
         runtime.lastActive = Date.now()
@@ -96,16 +95,13 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     })
   }
   const revoke = (userId: string, sessionId?: string) => {
-    for (const [id, set] of connections) {
+    for (const [id, entry] of connections) {
       // Sessions have already been removed from SQLite; internal connections retain their owner.
-      if (owners.get(id) !== userId || (sessionId && id !== sessionId)) continue
-      for (const connection of set) connection.destroy()
+      if (entry.userId !== userId || (sessionId && id !== sessionId)) continue
+      for (const connection of entry.connections) connection.destroy()
       connections.delete(id)
-      owners.delete(id)
     }
   }
-  const owners = new Map<string, string>()
-  const remember = (auth: Auth) => owners.set(auth.session.id, auth.user.id)
   const forwardedHeaders = (req: IncomingMessage, runtime: Runtime, auth: Auth) => {
     const headers = { ...req.headers }
     for (const key of Object.keys(headers))
@@ -367,7 +363,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
     const runtime = await runtimes.get(auth.user)
     if (req.destroyed || res.destroyed) return
     if (authFor(req).session.id !== auth.session.id) fail(401, 'Session expired')
-    remember(auth)
+
     track(auth, res, runtime)
     const upstream = http.request(
       {
@@ -400,6 +396,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
   }
   const server = http.createServer((req, res) => {
     void handle(req, res).catch((error: unknown) => {
+      if (!(error instanceof AccountError) || error.status >= 500) logs.App.logcat.error('[Gateway] Request failed', error)
       if (res.headersSent || res.destroyed) {
         res.destroy()
         return
@@ -420,7 +417,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
         runtime = await runtimes.get(auth.user)
       if (socket.destroyed) return
       if (authFor(req).session.id !== auth.session.id) fail(401, 'Session expired')
-      remember(auth)
+
       track(auth, socket, runtime)
       const upstream = http.request({
         hostname: '127.0.0.1',
@@ -455,12 +452,11 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
   })
   const interval = setInterval(() => {
     void runtimes.reap().catch(() => {})
-    for (const [id, set] of connections) {
+    for (const [id, entry] of connections) {
       const session = accounts.db.prepare('SELECT id FROM sessions WHERE id = ? AND expiresAt > ?').get(id, Date.now())
       if (!session) {
-        for (const connection of set) connection.destroy()
+        for (const connection of entry.connections) connection.destroy()
         connections.delete(id)
-        owners.delete(id)
       }
     }
   }, 15_000)
@@ -475,7 +471,7 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
       await publications.close()
       clearInterval(interval)
       server.close()
-      for (const set of connections.values()) for (const connection of set) connection.destroy()
+      for (const entry of connections.values()) for (const connection of entry.connections) connection.destroy()
       try {
         await runtimes.close()
       } finally {

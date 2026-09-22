@@ -4,7 +4,7 @@ import { createMessage2Call } from 'message2call'
 
 import handleAuth from './auth'
 import { removeAuthKey } from './data'
-import { buildIPCUrlPath, decryptMsg, encryptMsg, log } from './utils'
+import { buildIPCUrlPath, decryptMsg, encryptMsg } from './utils'
 import { wsEvent } from './wsEvent'
 
 export interface KeyInfo {
@@ -270,7 +270,7 @@ export const connect = async (
             client?.send(data)
           })
           .catch((err) => {
-            log.error('encrypt msg error: ', err)
+            console.error('encrypt msg error: ', err)
             client?.close(IPC_CLOSE_CODE.failed)
           })
       },
@@ -279,7 +279,7 @@ export const connect = async (
       },
       onError(error, path, groupName) {
         const name = groupName ?? ''
-        log.error(`call ${name} ${path.join('.')} error:`, error)
+        console.error(`call ${name} ${path.join('.')} error:`, error)
         // if (groupName == null) return
         // client?.close(IPC_CLOSE_CODE.failed)
         // sendSyncStatus({
@@ -307,14 +307,14 @@ export const connect = async (
             try {
               syncData = JSON.parse(data)
             } catch (err) {
-              log.error('parse msg error: ', err)
+              console.error('parse msg error: ', err)
               client?.close(IPC_CLOSE_CODE.failed)
               return
             }
             message2read.message(syncData)
           })
           .catch((error) => {
-            log.error('decrypt msg error: ', error)
+            console.error('decrypt msg error: ', error)
             client?.close(IPC_CLOSE_CODE.failed)
           })
       }
@@ -342,7 +342,7 @@ export const connect = async (
     client.addEventListener('open', () => {
       pending = false
       resolve()
-      log.info('connect')
+      console.info('connect')
       // const store = getStore()
       // global.lxKeyInfo = keyInfo
       client!.isReady = false
@@ -362,7 +362,7 @@ export const connect = async (
       try {
         for (const handler of closeEvents) void handler(err)
       } catch (err) {
-        log.error((err as Error | null)?.message)
+        console.error((err as Error | null)?.message)
       }
       closeEvents = []
       disconnected = true
@@ -417,7 +417,7 @@ export const connect = async (
 
 export const disconnect = async () => {
   if (!client) return
-  log.info('disconnecting...')
+  console.info('disconnecting...')
   client.close(IPC_CLOSE_CODE.normal)
   client = null
   heartbeatTools.clearTimeout()

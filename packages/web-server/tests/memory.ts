@@ -20,7 +20,7 @@ const main = async () => {
     for (let i = 0; i < 5; i++) {
       global.gc?.()
       await delay(250)
-      rss.push(process.memoryUsage().rss + (baseline ? runtimes.status().active.reduce((sum, runtime) => sum + runtime.rss, 0) : 0))
+      rss.push(process.memoryUsage().rss + (baseline ? runtimes.status().active.reduce((sum, runtime) => sum + (runtime as unknown as { rss: number }).rss, 0) : 0))
     }
     const status = runtimes.status()
     assert.equal(status.active.length, accounts)

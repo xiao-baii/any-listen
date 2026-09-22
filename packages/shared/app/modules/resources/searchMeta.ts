@@ -18,10 +18,6 @@ export const createSearchMeta = (services: ResourceServices) => {
         source,
         keyword,
       })
-      .then((result) => {
-        // console.log(result)
-        return result ?? []
-      })
   }
 
   const hotSearch = async ({ extensionId, source }: { extensionId: string; source: string }): Promise<string[]> => {
@@ -29,10 +25,6 @@ export const createSearchMeta = (services: ResourceServices) => {
       .resourceAction('hotSearch', {
         extensionId,
         source,
-      })
-      .then((result) => {
-        // console.log(result)
-        return result ?? []
       })
   }
   return { tipSearch, hotSearch }

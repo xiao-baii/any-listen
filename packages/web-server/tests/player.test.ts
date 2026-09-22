@@ -12,6 +12,44 @@ import type { DBSeriveTypes } from '../../shared/app/modules/worker/utils'
 import { STORE_NAMES } from '../../shared/common/constants'
 import { createAccountStores } from '../src/accounts/stores'
 import { createAppState } from '../src/app/app/state'
+import { createMusicSearch } from '../../shared/app/modules/resources/musicSearch'
+import { createFallbackSearch } from '../../shared/app/modules/resources/search/music'
+import type { ResourceServices } from '../../shared/app/modules/resources/shared'
+
+test('search normalization preserves matching boundaries, versions and candidate order', async () => {
+  let songs: AnyListen.Music.MusicInfoOnline[] = []
+  let calls = 0
+  const services = { extensionSerive: { resourceAction: async () => {
+    calls++
+    return { list: structuredClone(songs), total: songs.length, page: 2, limit: 7 }
+  } } } as unknown as ResourceServices
+  const direct = createMusicSearch(services)
+  const fallback = createFallbackSearch(services)
+  const song = (id: string, interval = '3:00', name = 'Song') => ({
+    id, name, singer: 'B、A', interval, isLocal: false, meta: { source: 'test', musicId: id, albumName: '' },
+  }) as AnyListen.Music.MusicInfoOnline
+  const query = { extensionId: 'test', source: 'test', name: 'Song', singer: 'A、B', albumName: '', interval: '3:00' }
+  assert.deepEqual(await direct.musicSearch({ ...query, name: ' ', page: 1 }), { list: [], total: 0, page: 1, limit: 30 })
+  assert.deepEqual(await fallback.musicSearch('test', 'test', ' ', '', 1), { list: [], total: 0, page: 1, limit: 10 })
+  assert.equal(calls, 0)
+  songs = [song('first'), song('second')]
+  assert.equal((await direct.findMusic(query))?.id, 'first')
+  assert.equal((await fallback.findMusic(query))?.id, 'first')
+  const result = await direct.musicSearch({ ...query, page: 2 })
+  assert.equal(result.limit, 7)
+  assert.equal(result.page, 2)
+  songs = [song('boundary', '3:05')]
+  assert.equal(await direct.findMusic(query), null)
+  assert.equal((await fallback.findMusic(query))?.id, 'boundary')
+  assert.equal((await direct.findMusic({ ...query, strict: false }))?.id, 'boundary')
+  songs = [song('outside', '3:30')]
+  assert.equal(await direct.findMusic({ ...query, strict: false }), null)
+  songs = [song('live', '3:00', 'Song (live)')]
+  assert.equal((await direct.findMusic(query))?.id, 'live')
+  assert.equal(await fallback.findMusic(query), null)
+  songs = [song('missing')]
+  assert.equal((await direct.findMusic({ extensionId: 'test', source: 'test', name: 'Song' }))?.id, 'missing')
+})
 
 const database = () => {
   let saved = {
@@ -175,6 +213,10 @@ test('account stores isolate identical names, recover invalid files and release 
     repaired.set('fixed', true)
     assert.equal(a.get('broken'), repaired)
     assert.equal(await readFile(path.join(root, 'a', 'broken.json.bak'), 'utf8'), 'invalid')
+    await writeFile(path.join(root, 'a', 'blocked.json'), 'invalid')
+    await mkdir(path.join(root, 'a', 'blocked.json.bak'))
+    assert.throws(() => a.get('blocked'))
+    assert.equal(await readFile(path.join(root, 'a', 'blocked.json'), 'utf8'), 'invalid')
     assert.throws(() => a.get('../b/settings'), /Invalid/)
     a.close()
     assert.throws(() => a.get('settings'), /closed/)

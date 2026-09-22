@@ -98,13 +98,13 @@ export const createServerApp = () => {
     async settingChanged(keys, setting) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remote.settingChanged(keys, setting)
+        return socket.remote.settingChanged(keys, setting)
       })
     },
     async deeplink(deeplink) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remote.deeplink(deeplink)
+        return socket.remote.deeplink(deeplink)
       })
     },
     // async createDesktopLyricProcess(action) {
@@ -117,19 +117,19 @@ export const createServerApp = () => {
     async closeMessageBox(key) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remote.closeMessageBox(key)
+        return socket.remote.closeMessageBox(key)
       })
     },
     async updateInfo(info) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remote.updateInfo(info)
+        return socket.remote.updateInfo(info)
       })
     },
     async appLog(type, log) {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
-        void socket.remote.appLog(type, log)
+        return socket.remote.appLog(type, log)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

@@ -30,7 +30,6 @@ const seekTo = (time: number) => {
 }
 
 const startBuffering = () => {
-  console.log('start t')
   if (mediaBuffer.timeout) return
   mediaBuffer.timeout = setTimeout(() => {
     mediaBuffer.timeout = null
@@ -50,12 +49,9 @@ const startBuffering = () => {
     }
     startBuffering()
     setCurrentTime(skipTime)
-    console.log(mediaBuffer.playTime)
-    console.log(currentTime)
   }, 3000)
 }
 const clearBufferTimeout = () => {
-  console.log('clear t')
   if (!mediaBuffer.timeout) return
   clearTimeout(mediaBuffer.timeout)
   mediaBuffer.timeout = null
@@ -63,7 +59,6 @@ const clearBufferTimeout = () => {
 }
 const setProgress = (time: number, maxTime?: number) => {
   if (!playerState.musicInfo.id) return
-  console.log('setProgress', time, maxTime)
   restorePlayTime = time
   if (mediaBuffer.playTime) {
     clearBufferTimeout()
@@ -93,7 +88,6 @@ export const initProgress = () => {
       unregistered.add(
         playerEvent.on('error', () => {
           restorePlayTime ||= getCurrentTime() // 记录出错的播放时间
-          console.log('handleError')
         })
       )
       unregistered.add(
@@ -128,7 +122,6 @@ export const initProgress = () => {
       )
       unregistered.add(
         playerEvent.on('playerPlaying', () => {
-          console.log('handlePlaying', mediaBuffer.playTime, restorePlayTime)
           clearBufferTimeout()
           if (mediaBuffer.playTime) {
             let playTime = mediaBuffer.playTime
@@ -164,7 +157,6 @@ export const initProgress = () => {
         playerEvent.on('progressChanged', (progress, old) => {
           if (documentHidden) return
           if (Math.abs(progress.progress - old.progress) > 0.01) {
-            console.log('activePlayProgressTransition')
             playerEvent.activePlayProgressTransition()
           }
         })

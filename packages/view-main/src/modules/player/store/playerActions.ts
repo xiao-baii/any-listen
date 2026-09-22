@@ -107,7 +107,6 @@ const getMusicPlayUrl = async (
 
   return getMusicUrl({ musicInfo, isRefresh })
     .then(({ url }) => {
-      console.log('url', url)
       if (diffCurrentMusicInfo(musicInfo)) return null
       // console.log(url)
       return url
@@ -531,7 +530,6 @@ const handlePlayMusicInfo = (info: AnyListen.Player.PlayMusicInfo, historyListIn
  * @returns
  */
 export const skipNext = async (isAutoSktp = false): Promise<void> => {
-  console.log('skipNext')
   if (isAutoSktp) {
     if (playerState.isPlayedStop) {
       playerEvent.pause()

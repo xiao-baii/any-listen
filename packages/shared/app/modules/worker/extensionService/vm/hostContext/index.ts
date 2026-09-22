@@ -1,3 +1,4 @@
+import { getExtensionLogDirectory } from '../../state'
 import vm from 'node:vm'
 
 import { EXTENSION, EXTENSION_VM_IPC_FUNC_NAMES } from '@any-listen/common/constants'
@@ -72,7 +73,7 @@ export const createContext = async (extension: AnyListen.Extension.Extension) =>
       return rawFn(...args)
     }
   }
-  const logcat = await createSimpleLogcat(extension.dataDirectory, EXTENSION.logFileName)
+  const logcat = await createSimpleLogcat(getExtensionLogDirectory(extension), EXTENSION.logFileName)
   const vmContext = vm.createContext(
     {
       ...context,

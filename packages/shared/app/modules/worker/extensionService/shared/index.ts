@@ -27,7 +27,7 @@ import { verifySignature } from '@any-listen/nodejs/sign'
 import { extensionEvent } from '../event'
 import { i18n } from '../i18n'
 import { loadExtension as loadExtensionByInternalExtension } from '../internalExtension'
-import { extensionState } from '../state'
+import { extensionState, getExtensionLogDirectory } from '../state'
 import { createVmConetxt, destroyContext, runExtension, setupVmContext } from '../vm'
 import { handlePreloadCall } from '../vm/hostContext/hostFuncs'
 import { sendConfigUpdatedEvent } from '../vm/hostContext/preloadFuncs'
@@ -519,7 +519,7 @@ export const getExtensionLastLogs = async (extId?: string): Promise<AnyListen.IP
           .filter((ext) => ext.enabled)
           .map(async (ext) => {
             return {
-              logs: await readLastLines(joinPath(ext.dataDirectory, EXTENSION.logFileName), 100),
+              logs: await readLastLines(joinPath(getExtensionLogDirectory(ext), EXTENSION.logFileName), 100),
               id: ext.id,
               name: ext.name,
             }
@@ -531,7 +531,7 @@ export const getExtensionLastLogs = async (extId?: string): Promise<AnyListen.IP
   if (!ext) throw new Error('extension not found')
   return [
     {
-      logs: await readLastLines(joinPath(ext.dataDirectory, EXTENSION.logFileName), 100),
+      logs: await readLastLines(joinPath(getExtensionLogDirectory(ext), EXTENSION.logFileName), 100),
       id: ext.id,
       name: ext.name,
     },
@@ -544,7 +544,7 @@ export const clearExtensionLogs = async (extId?: string) => {
       extensionState.extensions
         .filter((ext) => ext.enabled)
         .map(async (ext) => {
-          const logPath = joinPath(ext.dataDirectory, EXTENSION.logFileName)
+          const logPath = joinPath(getExtensionLogDirectory(ext), EXTENSION.logFileName)
           if (await checkFile(logPath)) {
             await fs.promises.writeFile(logPath, '')
           }
@@ -555,7 +555,7 @@ export const clearExtensionLogs = async (extId?: string) => {
 
   const ext = extensionState.extensions.find((ext) => ext.id == extId)
   if (!ext) throw new Error('extension not found')
-  const logPath = joinPath(ext.dataDirectory, EXTENSION.logFileName)
+  const logPath = joinPath(getExtensionLogDirectory(ext), EXTENSION.logFileName)
   if (await checkFile(logPath)) {
     await fs.promises.writeFile(logPath, '')
   }

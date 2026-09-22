@@ -47,6 +47,7 @@ export const buildConfig = (mode: string): UserConfig => {
           'view-lyric.ipc': path.join(projectPath, 'src/app/renderer/winLyric/index.ts'),
         },
         output: {
+          minify: { compress: { dropConsole: true } },
           entryFileNames: isProd ? '[name].[hash].js' : '[name].js',
           chunkFileNames: isProd ? '[name].[hash].js' : '[name].js',
           format: 'esm',

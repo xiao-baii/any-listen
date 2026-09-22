@@ -11,7 +11,8 @@ test(
   { timeout: 15000 },
   async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'any-listen-shared-source-'))
-    const host = new SharedExtensions(path.join(process.env.ACCOUNT_TEST_ROOT!, 'build/server/extension-service.worker.js'), root)
+    const logDirectory = path.join(root, 'persistent-log', 'extensions')
+    const host = new SharedExtensions(path.join(process.env.ACCOUNT_TEST_ROOT!, 'build/server/extension-service.worker.js'), root, logDirectory)
     const directory = path.join(root, 'release')
     const manifest = {
       id: 'online-metadata',
@@ -36,7 +37,9 @@ test(
           path.join(directory, 'ext', id, 'index.js'),
           `
         const api = require('any-listen'); let calls = 0;
+        api.logcat.info('extension-log-persistence-marker');
         api.registerResourceAction({ musicUrl: async ({ musicInfo }) => {
+          if (musicInfo.name === 'invalid') return { url: '', quality: 'invalid' };
           if (musicInfo.name === 'private') await api.app.showInputDialog({ title: 'Private login' });
           if (musicInfo.name === 'hang') return new Promise(() => {});
           const n = ++calls;
@@ -65,12 +68,20 @@ test(
       assert.equal(((await first).value as { url: string }).url, 'https://example.com/1.mp3')
       await secondRejected
       assert.equal(((await third).value as { url: string }).url, 'https://example.com/2.mp3')
+      await assert.rejects(host.call('resourceAction', request('invalid')), /url|quality/)
       await assert.rejects(host.call('getPlayInfo', []), /forbidden/)
       const blocked = host.call('resourceAction', request('hang'))
       const rejected = assert.rejects(blocked)
       await new Promise((resolve) => setTimeout(resolve, 50))
       await host.switch('two', directory, [], '')
       await rejected
+      const logFile = path.join(logDirectory, 'online-metadata', 'output.log')
+      const persisted = await readFile(logFile, 'utf8')
+      assert.equal(persisted.split('extension-log-persistence-marker').length - 1, 2)
+      const pageLogs = (await host.call('getExtensionLastLogs', ['online-metadata'])).value as Array<{ logs: string }>
+      assert.match(pageLogs[0].logs, /extension-log-persistence-marker/)
+      await host.call('clearExtensionLogs', ['online-metadata'])
+      assert.equal(await readFile(logFile, 'utf8'), '')
       assert.equal(host.status().workers, 1)
       assert.equal(((await host.call('resourceAction', request())).value as { url: string }).url, 'https://example.com/1.mp3')
       await assert.rejects(host.call('resourceAction', request('private')), /personal capability/)

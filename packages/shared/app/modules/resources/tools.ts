@@ -17,14 +17,12 @@ export const createMusicFinder = (
   ): Promise<T> => {
     const source = getExtSource('musicSearch', excludeList)
     // console.log('excludeList', excludeList, source)
-    if (!source) throw new Error('Get url failed, no source')
+    if (!source) throw new Error('No available music search source')
     const music = await findMusicByExt({ extensionId: source.extensionId, source: source.id, ...info })
     if (music) {
       try {
         return await handler(music)
-      } catch (e) {
-        console.error(e)
-      }
+      } catch {}
     }
     excludeList.push(buildExtSourceId(source.extensionId, source.id))
     return findSourceMusic(info, handler, excludeList)

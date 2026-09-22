@@ -29,15 +29,7 @@ export const createComments = (services: ResourceServices) => {
         page,
         id,
       })
-      .then((result) => {
-        // console.log(result)
-        return {
-          list: result.list ?? [],
-          total: result.total,
-          limit: result.limit ?? 30,
-          page: result.page ?? 1,
-        }
-      })
+      .then(({ list, total, limit, page }) => ({ list, total, limit, page }))
   }
   return { musicComment }
 }

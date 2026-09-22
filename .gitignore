@@ -62,6 +62,7 @@ admin-password.txt
 *.sqlite-wal
 *.sqlite-shm
 /data/
+/log/
 
 # next.js build output
 .next
