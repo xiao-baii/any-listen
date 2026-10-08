@@ -14,3 +14,5 @@ export { findMusic, musicSearch } from './musicSearch'
 export { songlist, songlistSearch, songlistDetail, songlistSorts, songlistTags, songlistDetailAll } from './songlist'
 export { topSongs, topSongsDate, topSongsDetail, topSongsDetailAll } from './topSongs'
 export { musicComment } from './comment'
+
+export { singerSearch, singer } from './singer'

@@ -7,6 +7,7 @@ import { createMusicUrls } from './musicUrl'
 import { createFallbackSearch } from './search/music'
 import { createSearchMeta } from './searchMeta'
 import type { ResourceState } from './shared'
+import { createSingers } from './singer'
 import { createSonglists } from './songlist'
 import { createMusicFinder } from './tools'
 import { createTopSongs } from './topSongs'
@@ -23,6 +24,7 @@ export const createResources = (extension: ExtensionSeriveTypes, state: Resource
   const selector = createSourceSelector(state)
   const finder = createMusicFinder(createFallbackSearch(services).findMusic, selector)
   return {
+    ...createSingers(services),
     ...createComments(services),
     ...createSearchMeta(services),
     ...createMusicSearch(services),

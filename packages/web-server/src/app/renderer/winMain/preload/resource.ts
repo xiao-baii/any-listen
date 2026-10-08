@@ -3,6 +3,12 @@ import type { IPCSocket } from '@/preload/ws'
 // 暴露给前端的方法
 export const createClientResource = (ipcSocket: IPCSocket) => {
   return {
+    async singerSearch(info) {
+      return ipcSocket.remote.singerSearch(info)
+    },
+    async singer(info) {
+      return ipcSocket.remote.singer(info)
+    },
     async tipSearch(info) {
       return ipcSocket.remote.tipSearch(info)
     },

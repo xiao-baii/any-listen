@@ -1,5 +1,8 @@
 import { ipc } from './ipc'
 
+export const singerSearch: AnyListen.IPC.ServerIPC['singerSearch'] = (info) => ipc.singerSearch(info)
+export const singer: AnyListen.IPC.ServerIPC['singer'] = (info) => ipc.singer(info)
+
 export const tipSearch: AnyListen.IPC.ServerIPC['tipSearch'] = async (info) => {
   return ipc.tipSearch(info)
 }

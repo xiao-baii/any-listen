@@ -1,4 +1,9 @@
 {
+  "singer_all": "All singers",
+  "singer_label": "Singer",
+  "singer_play_loop": "Loop play",
+  "singer_unsupported": "Singer search is not supported",
+  "singer_search": "Search singers",
   "app_name": "Any Listen",
   "batch_select": "Bulk selection",
   "batch_select_exit": "Exit multiple selection",

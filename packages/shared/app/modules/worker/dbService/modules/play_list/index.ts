@@ -1,9 +1,10 @@
 import { databaseState } from '../../context'
 
-const getState = () => databaseState('play_list/index.ts', () => ({
-  playList: null as AnyListen.Player.PlayMusicInfo[] | null,
-  rawPoss: new Map<string, number>(),
-}))
+const getState = () =>
+  databaseState('play_list/index.ts', () => ({
+    playList: null as AnyListen.Player.PlayMusicInfo[] | null,
+    rawPoss: new Map<string, number>(),
+  }))
 
 /* eslint-disable @typescript-eslint/naming-convention */
 import { arrPush, arrPushByPosition } from '@any-listen/common/utils'
@@ -20,15 +21,13 @@ import {
 } from './dbHelper'
 import type { ListMusicInfo, PlayedInfo } from './statements'
 
-
-
-
 const sourceMap: Record<number, AnyListen.Player.SourceType> = {
   0: 'local',
   1: 'songlist',
   2: 'topSongs',
   3: 'search',
   4: 'album',
+  5: 'singer',
 }
 const sourceMapReverse = Object.fromEntries(Object.entries(sourceMap).map(([k, v]) => [v, Number(k)])) as Record<
   AnyListen.Player.SourceType,
@@ -115,7 +114,9 @@ export const playListOverride = (newList: AnyListen.Player.PlayMusicInfo[]) => {
 export const playListAdd = (position: number, list: AnyListen.Player.PlayMusicInfo[]) => {
   initListInfo()
   if (position < 0 || position >= getState().playList!.length) {
-    const pos = getState().playList!.length ? (getState().rawPoss.get(getState().playList!.at(-1)!.itemId) ?? getState().playList!.length) + 1 : 0
+    const pos = getState().playList!.length
+      ? (getState().rawPoss.get(getState().playList!.at(-1)!.itemId) ?? getState().playList!.length) + 1
+      : 0
     const newLists: ListMusicInfo[] = toDBList(list, pos)
     inertInfo(newLists)
     getState().playList = arrPush(getState().playList!, list)

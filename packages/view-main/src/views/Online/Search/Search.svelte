@@ -28,6 +28,7 @@
         label: i18n.t(`online__search_type_${sType}`),
       })
     }
+    if (!list.some((item) => item.id === 'singer')) list.push({ id: 'singer', label: i18n.t('online__search_type_singer') })
     return list
   })
 
@@ -75,7 +76,7 @@
 {:else if activeType.val == 'album'}
   <Album sourceList={resource.val.albumSearch!} />
 {:else if activeType.val == 'singer'}
-  <Singer sourceList={resource.val.singerSearch!} />
+  <Singer sourceList={resource.val.singerSearch ?? []} />
 {/if}
 
 <!-- <style lang="less">

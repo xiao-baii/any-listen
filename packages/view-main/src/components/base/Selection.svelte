@@ -8,12 +8,14 @@
     itemkey,
     itemname,
     onchange,
+    arialabel,
   }: {
     value: T[K]
     list: T[]
     itemkey: K
     itemname: keyof T
     onchange?: (val: T[K]) => void
+    arialabel?: string
   } = $props()
 
   let domBtn: HTMLButtonElement
@@ -61,6 +63,8 @@
   }
 
   const handleClick = (item: T) => {
+    visible = false
+    domBtn.focus()
     if (item[itemkey] === value) return
     value = item[itemkey]
     onchange?.(value)
@@ -68,7 +72,7 @@
 </script>
 
 <div class={['select', { active: visible }]}>
-  <button bind:this={domBtn} class="button" onclick={handleShow}>
+  <button bind:this={domBtn} class="button" onclick={handleShow} aria-label={arialabel} aria-expanded={visible}>
     <span class="label">{label}</span>
     <div class="icon">
       <svg version="1.1" xmlns="http://www.w3.org/2000/svg" height="100%" viewBox="0 0 451.847 451.847">

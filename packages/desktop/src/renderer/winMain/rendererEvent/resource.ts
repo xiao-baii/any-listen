@@ -1,4 +1,6 @@
 import {
+  singerSearch,
+  singer,
   tipSearch,
   hotSearch,
   musicSearch,
@@ -22,6 +24,12 @@ import type { ExposeFunctions } from '.'
 // 暴露给前端的方法
 export const createExposeResource = () => {
   return {
+    async singerSearch(event, info) {
+      return singerSearch(info)
+    },
+    async singer(event, info) {
+      return singer(info)
+    },
     async tipSearch(event, info) {
       return tipSearch(info)
     },

@@ -27,6 +27,7 @@ import { playerState } from '../store/state'
 
 let syncId = ''
 const checkListSync = async () => {
+  if (!playerState.playInfo.listId) return false
   if (syncId || playerState.playInfo.source != 'local') return playerState.playInfo.isLinkedList
   const currentMusicList = playerState.playList.filter((m) => !m.playLater)
   const targetMusicList = await getListMusics(playerState.playInfo.listId)
@@ -74,6 +75,10 @@ const throttleListChangeSync = throttle(async () => {
   const curSyncId = syncId
   const targetMusicList = await getListMusics(targetListId)
   if (curSyncId != syncId) return
+  if (targetListId !== playerState.playInfo.listId || !playerState.playInfo.isLinkedList) {
+    syncId = ''
+    return
+  }
   const newTargetList = targetMusicList.map((m) => {
     const newInfo = createPlayMusicInfo({
       musicInfo: m,

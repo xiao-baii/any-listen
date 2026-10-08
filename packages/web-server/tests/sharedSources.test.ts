@@ -12,14 +12,18 @@ test(
   async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'any-listen-shared-source-'))
     const logDirectory = path.join(root, 'persistent-log', 'extensions')
-    const host = new SharedExtensions(path.join(process.env.ACCOUNT_TEST_ROOT!, 'build/server/extension-service.worker.js'), root, logDirectory)
+    const host = new SharedExtensions(
+      path.join(process.env.ACCOUNT_TEST_ROOT!, 'build/server/extension-service.worker.js'),
+      root,
+      logDirectory
+    )
     const directory = path.join(root, 'release')
     const manifest = {
       id: 'online-metadata',
       name: 'Fixture',
       main: 'index.js',
       version: '1.0.0',
-      contributes: { resource: [{ id: 'test', name: 'Test', resource: ['musicUrl'] }] },
+      contributes: { resource: [{ id: 'test', name: 'Test', resource: ['musicUrl', 'singerSearch', 'singer'] }] },
     }
     const request = (name = '') => [
       'musicUrl',
@@ -38,7 +42,10 @@ test(
           `
         const api = require('any-listen'); let calls = 0;
         api.logcat.info('extension-log-persistence-marker');
-        api.registerResourceAction({ musicUrl: async ({ musicInfo }) => {
+        api.registerResourceAction({
+          singerSearch: async ({ keyword, page }) => ({ list: [{ id: 'artist', name: keyword }], total: 1, page, limit: 30 }),
+          singer: async ({ id, page }) => ({ list: [], info: { id, name: 'Fixture singer' }, total: 0, page, limit: 30 }),
+          musicUrl: async ({ musicInfo }) => {
           if (musicInfo.name === 'invalid') return { url: '', quality: 'invalid' };
           if (musicInfo.name === 'private') await api.app.showInputDialog({ title: 'Private login' });
           if (musicInfo.name === 'hang') return new Promise(() => {});
@@ -59,6 +66,14 @@ test(
       const snapshot = await readFile(path.join(directory, 'extensions.json'), 'utf8')
       await host.switch('one', directory, [], '')
       assert.equal(await readFile(path.join(directory, 'extensions.json'), 'utf8'), snapshot)
+      const singerParams = { extensionId: 'online-metadata', source: 'test', page: 1 }
+      const searchResult = await host.call('resourceAction', ['singerSearch', { ...singerParams, keyword: 'Fixture singer' }])
+      assert.equal(
+        (searchResult.value as AnyListen.IPCExtension.ListCommonResult<AnyListen.Resource.SingerItem>).list[0].id,
+        'artist'
+      )
+      const singerResult = await host.call('resourceAction', ['singer', { ...singerParams, id: 'artist' }])
+      assert.equal((singerResult.value as AnyListen.IPCExtension.SingerDetailResult).info.name, 'Fixture singer')
       const cancelled = new AbortController()
       const first = host.call('resourceAction', request())
       const second = host.call('resourceAction', request(), 'en-us', cancelled.signal)

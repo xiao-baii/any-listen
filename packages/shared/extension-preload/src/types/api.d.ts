@@ -1064,7 +1064,12 @@ declare global {
     }
     type MusicSearchResult = ListCommonResult<AnyListen.Music.MusicInfoOnline>
 
+    interface SingerDetailResult extends ListCommonResult<AnyListen.Music.MusicInfoOnline> {
+      info: AnyListen.Resource.SingerItem
+    }
     interface ResourceAction {
+      singerSearch: (params: CommonSearchParams) => Promise<ListCommonResult<AnyListen.Resource.SingerItem>>
+      singer: (params: ListDetailParams) => Promise<SingerDetailResult>
       tipSearch: (params: TipSearchParams) => Promise<string[]>
       hotSearch: (params: CommonParams) => Promise<string[]>
       musicSearch: (params: MusicSearchParams) => Promise<ListCommonResult<AnyListen.Music.MusicInfoOnline>>

@@ -36,25 +36,43 @@ test('database contexts retain their own state across interleaved asynchronous w
 
 test('managed playlist caches share a global budget and release closed accounts', () => {
   const contexts = Array.from({ length: 10 }, () => new DatabaseContext(true))
-  const caches = contexts.map((context) => context.run(() => databaseState('music_library/index.ts', () => ({
-    musicLists: new Map<string, AnyListen.Music.MusicInfo[]>(),
-  })).musicLists))
+  const caches = contexts.map((context) =>
+    context.run(
+      () =>
+        databaseState('music_library/index.ts', () => ({
+          musicLists: new Map<string, AnyListen.Music.MusicInfo[]>(),
+        })).musicLists
+    )
+  )
   const song = { id: 'same-id' } as AnyListen.Music.MusicInfo
   try {
-    contexts.forEach((context, index) => context.run(() => {
-      caches[index].set('same-list', Array.from({ length: 2000 }, () => song))
-      trimMusicListCache()
-    }))
-    assert.equal(caches.reduce((sum, cache) => sum + [...cache.values()].reduce((n, list) => n + list.length, 0), 0), 16000)
+    contexts.forEach((context, index) =>
+      context.run(() => {
+        caches[index].set(
+          'same-list',
+          Array.from({ length: 2000 }, () => song)
+        )
+        trimMusicListCache()
+      })
+    )
+    assert.equal(
+      caches.reduce((sum, cache) => sum + [...cache.values()].reduce((n, list) => n + list.length, 0), 0),
+      16000
+    )
     assert.equal(caches[0].size, 0)
     assert.equal(caches[1].size, 0)
     assert.equal(caches[9].get('same-list')?.length, 2000)
-    contexts.forEach((context, index) => context.run(() => {
-      caches[index].clear()
-      for (let n = 0; n < 8; n++) caches[index].set(String(n), [])
-      trimMusicListCache()
-    }))
-    assert.equal(caches.reduce((sum, cache) => sum + cache.size, 0), 64)
+    contexts.forEach((context, index) =>
+      context.run(() => {
+        caches[index].clear()
+        for (let n = 0; n < 8; n++) caches[index].set(String(n), [])
+        trimMusicListCache()
+      })
+    )
+    assert.equal(
+      caches.reduce((sum, cache) => sum + cache.size, 0),
+      64
+    )
   } finally {
     contexts.forEach((context) => context.close())
   }
@@ -130,7 +148,9 @@ test('two account databases isolate identical song ids, queues and metadata and 
     assert.equal(b.service.queryMetadataPlayInfo().time, 0)
     a.service.playListOverride([
       { itemId: 'same-item', musicInfo: song('a'), listId: LIST_IDS.DEFAULT, source: 'search', played: false, playLater: false },
+      { itemId: 'singer-item', musicInfo: song('singer'), listId: 'artist', source: 'singer', played: false, playLater: false },
     ])
+    a.service.saveMetadataPlayListInfo(null, 'singer')
     assert.equal(b.service.getPlayList().length, 0)
     assert.equal(a.service.getPlayList()[0].musicInfo.name, 'a')
     const largeList = Array.from({ length: 2001 }, (_, index) => ({ ...song(`track-${index}`), id: `id-${index}` }))
@@ -146,6 +166,9 @@ test('two account databases isolate identical song ids, queues and metadata and 
     a = await open('a')
     assert.equal(a.service.getListMusics(LIST_IDS.DEFAULT)[0].name, 'a')
     assert.equal(a.service.queryMetadataPlayInfo().time, 42)
+    assert.deepEqual(a.service.queryMetadataPlayListInfo(), { listId: null, source: 'singer' })
+    assert.equal(a.service.getPlayList()[1].source, 'singer')
+    assert.equal(a.service.getPlayList()[1].listId, 'artist')
     assert.equal(a.service.getPlayList()[0].musicInfo.name, 'a')
     assert.equal(b.service.getListMusics(LIST_IDS.DEFAULT)[0].name, 'b')
     a.close()

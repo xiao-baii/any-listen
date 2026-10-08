@@ -27,6 +27,7 @@
     listsort = $bindable(),
     loaded,
     onscroll,
+    onplay,
   }: {
     listinfo: ListInfo
     list: AnyListen.Music.MusicInfo[]
@@ -37,7 +38,13 @@
     listsort: boolean
     loaded: boolean
     onscroll?: (pos: number) => void
+    onplay?: (music: AnyListen.Music.MusicInfo) => void
   } = $props()
+
+  const handlePlay = (music: AnyListen.Music.MusicInfo) => {
+    if (onplay) onplay(music)
+    else void playMusic(listinfo.id, list, music, source, getListMetaInfo(listinfo))
+  }
 
   let virtualizedList = $state<ComponentExports<typeof VirtualizedList<AnyListen.Music.MusicInfo>> | null>(null)
 
@@ -182,14 +189,14 @@
               select.handleSelect(index)
             } else {
               select.setSelectIndex(index)
-              void musicClick(list, listinfo.id, item, source, getListMetaInfo(listinfo))
+              void musicClick(list, listinfo.id, item, source, getListMetaInfo(listinfo), handlePlay)
               if (isKey) {
-                void musicClick(list, listinfo.id, item, source, getListMetaInfo(listinfo))
+                void musicClick(list, listinfo.id, item, source, getListMetaInfo(listinfo), handlePlay)
               }
             }
           }}
           onplay={() => {
-            void playMusic(listinfo.id, list, item, source, getListMetaInfo(listinfo))
+            handlePlay(item)
           }}
         />
       {/snippet}
@@ -200,7 +207,7 @@
       type={listinfo.type}
       deviceid={listinfo.type == 'local' ? listinfo.listMeta.deviceId : null}
       onplay={async (musicInfo) => {
-        void playMusic(listinfo.id, list, musicInfo, source, getListMetaInfo(listinfo))
+        handlePlay(musicInfo)
       }}
       onhide={() => {
         activeIndex = -1
@@ -218,7 +225,7 @@
   {list}
   onselect={(idx, isPlay) => {
     if (isPlay) {
-      void playMusic(listinfo.id, list, list[idx], source, getListMetaInfo(listinfo))
+      handlePlay(list[idx])
     } else {
       scrollToIndex(idx)
     }

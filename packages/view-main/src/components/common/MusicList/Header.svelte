@@ -13,6 +13,7 @@
     finding,
     saveable,
     onplay,
+    loop = false,
     onplayrandom,
     onsave,
     onmulti,
@@ -27,6 +28,7 @@
     multimode: boolean
     finding: boolean
     saveable?: boolean
+    loop?: boolean
     onplay: () => void
     onplayrandom: () => void
     onsave: () => void
@@ -60,7 +62,7 @@
       <div class="btns">
         <Btn disabled={!musiccount || disabled} icontext onclick={onplay}>
           <SvgIcon name="play" />
-          {$t('play_all')}
+          {$t(loop ? 'singer_play_loop' : 'play_all')}
         </Btn>
         <Btn disabled={!musiccount || disabled} icontext onclick={onplayrandom}>
           <SvgIcon name="list-random" />

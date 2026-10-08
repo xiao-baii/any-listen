@@ -48,6 +48,9 @@ export const scrollListTo = (listId: string, source: AnyListen.Player.SourceType
       base: '/online',
       path: `/online/topSongs?${urlParamKeyMap.source}=${encodeURIComponent((musicInfo as AnyListen.Music.MusicInfoOnline).meta.source)}&id=${encodeURIComponent(listId)}&mid=${encodeURIComponent(musicInfo.id)}`,
     }
+  } else if (source === 'singer') {
+    void push(`/online?t=singer&${listId}`)
+    return
   } else if (source === 'search') {
     const searchInfo = parseRequestKey(listId)
     if (!searchInfo) return

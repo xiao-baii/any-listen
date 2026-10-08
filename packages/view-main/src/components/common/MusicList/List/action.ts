@@ -53,7 +53,8 @@ export const musicClick = async (
   listId: string,
   musicInfo: AnyListen.Music.MusicInfo,
   source: AnyListen.Player.SourceType,
-  metaInfo?: OnlineListMetaInfo
+  metaInfo?: OnlineListMetaInfo,
+  onplay?: (music: AnyListen.Music.MusicInfo) => void
 ) => {
   if (window.performance.now() - clickTime > 400 || clickInfo !== musicInfo) {
     clickTime = window.performance.now()
@@ -63,7 +64,8 @@ export const musicClick = async (
   clickTime = 0
   clickInfo = null
 
-  void playMusic(listId, list, musicInfo, source, metaInfo)
+  if (onplay) onplay(musicInfo)
+  else void playMusic(listId, list, musicInfo, source, metaInfo)
 }
 
 export const playMusicLater = async (

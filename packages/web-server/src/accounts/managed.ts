@@ -99,6 +99,8 @@ const userAllowed = new Set([
   'tipSearch',
   'hotSearch',
   'musicSearch',
+  'singerSearch',
+  'singer',
   'musicPicSearch',
   'lyricSearch',
   'lyricDetail',

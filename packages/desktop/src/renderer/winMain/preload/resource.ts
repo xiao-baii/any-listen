@@ -3,6 +3,12 @@ import type { MainCall } from '.'
 // 暴露给前端的方法
 export const createClientResource = (main: MainCall) => {
   return {
+    async singerSearch(info) {
+      return main.singerSearch(info)
+    },
+    async singer(info) {
+      return main.singer(info)
+    },
     async tipSearch(info) {
       return main.tipSearch(info)
     },

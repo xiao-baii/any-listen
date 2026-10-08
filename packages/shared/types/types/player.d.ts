@@ -15,7 +15,7 @@ declare namespace AnyListen {
       collect: boolean
     }
 
-    type SourceType = 'local' | 'songlist' | 'topSongs' | 'search' | 'album'
+    type SourceType = 'local' | 'songlist' | 'topSongs' | 'search' | 'album' | 'singer'
 
     interface PlayMusicInfo {
       /**

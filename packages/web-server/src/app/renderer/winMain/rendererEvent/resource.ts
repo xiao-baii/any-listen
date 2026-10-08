@@ -1,4 +1,6 @@
 import {
+  singerSearch,
+  singer,
   tipSearch,
   hotSearch,
   musicSearch,
@@ -20,11 +22,55 @@ import {
 import type { ExposeClientFunctions } from '.'
 
 // 暴露给前端的方法
-export const createExposeResource = (service = { tipSearch, hotSearch, musicSearch, musicPicSearch, lyricSearch, getLyric,
-  songlistSearch, songlistSorts, songlistTags, songlist, songlistDetail, topSongs, topSongsDate, topSongsDetail, findMusic, musicComment }) => {
-  const { tipSearch, hotSearch, musicSearch, musicPicSearch, lyricSearch, getLyric, songlistSearch,
-    songlistSorts, songlistTags, songlist, songlistDetail, topSongs, topSongsDate, topSongsDetail, findMusic, musicComment } = service
+export const createExposeResource = (
+  service = {
+    singerSearch,
+    singer,
+    tipSearch,
+    hotSearch,
+    musicSearch,
+    musicPicSearch,
+    lyricSearch,
+    getLyric,
+    songlistSearch,
+    songlistSorts,
+    songlistTags,
+    songlist,
+    songlistDetail,
+    topSongs,
+    topSongsDate,
+    topSongsDetail,
+    findMusic,
+    musicComment,
+  }
+) => {
+  const {
+    singerSearch,
+    singer,
+    tipSearch,
+    hotSearch,
+    musicSearch,
+    musicPicSearch,
+    lyricSearch,
+    getLyric,
+    songlistSearch,
+    songlistSorts,
+    songlistTags,
+    songlist,
+    songlistDetail,
+    topSongs,
+    topSongsDate,
+    topSongsDetail,
+    findMusic,
+    musicComment,
+  } = service
   return {
+    async singerSearch(event, info) {
+      return singerSearch(info)
+    },
+    async singer(event, info) {
+      return singer(info)
+    },
     async tipSearch(event, info) {
       return tipSearch(info)
     },

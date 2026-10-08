@@ -273,7 +273,7 @@ export const setPlayMusicInfo = (info: AnyListen.Player.PlayMusicInfo | null, in
     if (!oldInfo.playLater && settingState.setting['player.togglePlayMethod'] == 'random') {
       if (!oldInfo.played) void setPlayListMusicPlayed([oldInfo.itemId])
       if (
-        oldInfo.listId == playerState.playInfo?.listId &&
+        playerState.playList.some((item) => item.itemId == oldInfo.itemId) &&
         oldHistoryIdx < 0 &&
         playerState.playHistoryList.at(-1)?.id != oldInfo.itemId
       ) {
@@ -348,6 +348,24 @@ export const playList = async (
   isClianHistory = false
 ) => {
   return handlePlayList(listId, 'local', targetList, index, isClianHistory)
+}
+
+export const playMusicCollection = async (
+  listId: string,
+  musicInfos: AnyListen.Music.MusicInfo[],
+  index: number,
+  source: AnyListen.Player.SourceType
+) => {
+  if (!musicInfos[index]) return
+  const list = createPlayMusicInfoList({ musicInfos, listId, source, playLater: false })
+  setPause()
+  await setPlayListMusic({ list, listId: null, source })
+  commit.setIsLinkedList(false)
+  resetRandomNextMusicInfo()
+  await setPlayHistoryList([])
+  setPlayMusicInfo(list[index], index)
+  commit.setPlaying(true)
+  handlePlay()
 }
 
 export interface OnlineListMetaInfo {

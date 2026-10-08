@@ -169,7 +169,12 @@ declare namespace AnyListen {
         params: BuildListProviderActionCommonParams<Music.MusicInfoOnline>
       ) => Promise<Music.MusicInfoOnline>
     }
+    interface SingerDetailResult extends ListCommonResult<Music.MusicInfoOnline> {
+      info: Resource.SingerItem
+    }
     interface ResourceAction {
+      singerSearch: (params: CommonSearchParams) => Promise<ListCommonResult<Resource.SingerItem>>
+      singer: (params: ListDetailParams) => Promise<SingerDetailResult>
       tipSearch: (params: TipSearchParams) => Promise<string[]>
       hotSearch: (params: CommonParams) => Promise<string[]>
       musicSearch: (params: MusicSearchParams) => Promise<ListCommonResult<Music.MusicInfoOnline>>

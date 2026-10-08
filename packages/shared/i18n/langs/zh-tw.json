@@ -1,4 +1,9 @@
 {
+  "singer_all": "全部歌手",
+  "singer_label": "歌手",
+  "singer_play_loop": "循環播放",
+  "singer_unsupported": "不支援歌手搜尋",
+  "singer_search": "搜尋歌手",
   "app_name": "Any Listen",
   "batch_select": "大量選擇",
   "batch_select_exit": "退出多選",

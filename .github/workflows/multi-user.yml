@@ -23,6 +23,8 @@ jobs:
           node-version: 24
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
+      - run: npm run verify-notes
+      - run: npm run test:singer
       - run: pnpm -F @shared/eslint exec tsc -p ../../web-server/tsconfig.accounts.json
       - run: SKIP_LIB_COPY= pnpm build:web
       - run: node packages/web-server/tests/run.cjs

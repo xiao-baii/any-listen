@@ -1,5 +1,10 @@
 declare namespace AnyListen {
   namespace Resource {
+    interface SingerItem {
+      id: string
+      name: string
+      img?: string
+    }
     interface SongListItem {
       id: string
       name: string

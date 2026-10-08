@@ -541,8 +541,41 @@ const verifyMusicCommentAction = (
   return result
 }
 
+const verifySingerPage = <T>(result: ListCommonResult<T>) => {
+  verifyListCommonResult(result, 'singer')
+  if (
+    !Number.isSafeInteger(result.limit) ||
+    result.limit <= 0 ||
+    !Number.isSafeInteger(result.page) ||
+    result.page < 1 ||
+    !Number.isSafeInteger(result.total) ||
+    result.total < 0
+  ) {
+    throw new Error('Invalid singer pagination')
+  }
+}
+const verifySingerItem = (item: AnyListen.Resource.SingerItem): AnyListen.Resource.SingerItem => ({
+  id: getRequiredString(item.id, 'singer id'),
+  name: getRequiredString(item.name, 'singer name'),
+  img: getOptionalString(item.img, 2048),
+})
+
 type RA = AnyListen.IPCExtension.ResourceAction
 const actionHandles: RA = {
+  async singerSearch(params) {
+    const result = await actions.singerSearch!(params)
+    verifySingerPage(result)
+    verifyArray(result.list, 'singer search', (item, index) => {
+      result.list[index] = verifySingerItem(item)
+    })
+    return result
+  },
+  async singer(params) {
+    const result = await actions.singer!(params)
+    verifySingerPage(result)
+    verifyMusicSearchAction(result, params.source)
+    return { ...result, info: verifySingerItem(result.info) }
+  },
   async tipSearch(params) {
     return verifyTipSearchAction(await actions.tipSearch!(params))
   },
