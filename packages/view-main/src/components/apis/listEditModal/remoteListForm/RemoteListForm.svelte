@@ -85,10 +85,11 @@
   }
   export const submit = async () => {
     verify()
+    const info = $state.snapshot(listInfo)
     if (item) {
-      await editUserList({ ...listInfo, meta: { ...listInfo.meta } })
+      await editUserList({ ...info, meta: { ...info.meta } })
     } else {
-      await createUserList({ ...listInfo, meta: { ...listInfo.meta }, parentId: targetId || null })
+      await createUserList({ ...info, meta: { ...info.meta }, parentId: targetId || null })
     }
   }
 
@@ -132,7 +133,7 @@
     // padding: 0 15px;
     // width: 320px;
     flex-flow: column nowrap;
-    gap: 10px;
+    gap: 8px;
     min-height: 0;
     // max-height: 100%;
     // overflow: hidden;

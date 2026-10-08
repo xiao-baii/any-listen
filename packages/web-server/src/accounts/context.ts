@@ -26,6 +26,7 @@ import { Event } from '@/app/app/event'
 import { createAppState } from '@/app/app/state'
 import { createHotKeyModule } from '@/app/modules/hotKey'
 import { createOnlineMusic } from '@/app/modules/music/online'
+import { createMusicCache } from '@/app/modules/music/shared'
 import { createPlayerModule } from '@/app/modules/player'
 import { createThemeModule } from '@/app/modules/theme'
 import { createExposeData } from '@/app/renderer/winMain/rendererEvent/data'
@@ -158,6 +159,7 @@ export const createAccountContext = async (options: {
   }
   const workers = { dbService: database, extensionService: extension, utilService }
   const music = createOnlineMusic(state, workers, resources)
+  const { buildLyricInfo } = createMusicCache(state, workers)
   const lists = createMusicList(database,
     async () => stores.get(STORE_NAMES.LIST_SCROLL_POSITION).getAll(),
     async info => { stores.get(STORE_NAMES.LIST_SCROLL_POSITION).override(info) }, validatePersonalData)
@@ -207,13 +209,19 @@ export const createAccountContext = async (options: {
     createServerDislike(sockets.broadcast, dislike.onDislikeAction, subscriptions)
     subscriptions.push(theme.themeEvent.on('theme_change', themeActions.themeChanged),
       theme.themeEvent.on('theme_list_change', themeActions.themeListChanged),
-      hotkey.hotKeyEvent.on('hot_key_config_update', hotkeyActions.hotKeyConfigUpdated),
+      hotkey.hotKeyEvent.on('config_updated', hotkeyActions.hotKeyConfigUpdated),
+      hotkey.hotKeyEvent.on('enable_chenged', hotkeyActions.hotKeyEnabled),
       player.getPlayerEvent().on('collectStatus', status => { void playerActions.playerAction({ action: 'collectStatus', data: status }) }))
     const expose = {
       ...createExposePlayer(player, true), ...createExposeTheme(theme), ...createExposeHotkey(hotkey),
       ...createExposeDislike(dislike), ...createExposeData(stores.get, state, ver => { state.version.ignoreVersion = ver }),
       ...createExposeSoundEffect(stores.get), ...createExposeResource(resources),
-      ...createExposeMusic({ ...music, getMusicPic: music.getMusicPicUrl }, database),
+      ...createExposeMusic({ ...music, getMusicPic: music.getMusicPicUrl,
+        async getLyricInfo(input) {
+          const result = await music.getLyricInfo(input)
+          return { ...result, info: await buildLyricInfo(result.info) }
+        },
+      }, database),
       ...createExposeList({ ...lists, getListsCover: ids => lists.getListsCover(ids, music.getMusicPicUrl),
         syncUserList: async id => {
           const list = (await lists.getAllUserLists()).userList.find(list => list.id === id)

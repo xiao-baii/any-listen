@@ -1,6 +1,5 @@
 import { throttle } from '@any-listen/common/utils'
 
-import { showMessageBox, t } from '../../common'
 import { winMainReadyEvent } from '../../common/event'
 import { musicListEvent, sendMusicListAction } from '../../modules/musicList'
 import { logs } from '../logs'
@@ -78,13 +77,13 @@ const handleSyncList = async () => {
   while (state.waitingSyncLists.length) {
     // TODO multi sync
     const list = state.waitingSyncLists.shift()!
-    await syncList(list).catch((err: Error) => {
-      void showMessageBox({
-        detail: t('extension.list_provider.get_list_music_ids_error', {
-          name: list.name,
-          err: err.message,
-        }),
-      })
+    await syncList(list).catch(() => {
+      // void showMessageBox({
+      //   detail: t('extension.list_provider.get_list_music_ids_error', {
+      //     name: list.name,
+      //     err: err.message,
+      //   }),
+      // })
     })
   }
   state.syncing = false
@@ -107,7 +106,7 @@ export const syncAllList = throttle(async () => {
     new Set([
       ...state.waitingSyncLists,
       ...(userLists.filter((l) => {
-        if (l.type !== 'online') return false
+        if (l.type !== 'online' || !l.meta.autoSync) return false
         const ids = filteredExts.get(l.meta.extensionId)
         if (!ids) return false
         if (ids.has(l.meta.source)) return true
@@ -179,7 +178,7 @@ export const initListProvider = async () => {
   })
   musicListEvent.on('list_create', async (pos, lists) => {
     for (const list of lists) {
-      if (list.type !== 'online') continue
+      if (list.type !== 'online' || !list.meta.autoSync) continue
       state.waitingSyncLists.push(list)
     }
     // console.log('run list provider sync after create list', state.initing)
@@ -188,7 +187,7 @@ export const initListProvider = async () => {
   musicListEvent.on('list_update', async (lists, isSync, isRemote) => {
     if (isSync || isRemote) return
     for (const list of lists) {
-      if (list.type !== 'online') continue
+      if (list.type !== 'online' || !list.meta.autoSync) continue
       state.waitingSyncLists.push(list)
     }
     // console.log('run list provider sync after update list', state.initing)

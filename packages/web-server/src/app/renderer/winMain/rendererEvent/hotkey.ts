@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-condition */
-import type { HOTKEY_Type } from '@any-listen/common/hotKey'
-
 import { getHotKeyConfig, handleHotkeyConfigAction } from '@/app/modules/hotKey'
 import { broadcast } from '@/modules/ipc/websocket'
 
@@ -14,7 +11,7 @@ export const createExposeHotkey = (service = { getHotKeyConfig, handleHotkeyConf
       return getHotKeyConfig()
     },
     async hotkeyConfigAction(event, action) {
-      return handleHotkeyConfigAction(action as AnyListen.HotKey.HotKeyActions<HOTKEY_Type>)
+      return handleHotkeyConfigAction(action)
     },
   } satisfies Partial<ExposeClientFunctions>
 }
@@ -27,6 +24,12 @@ export const createServerHotkey = (send = broadcast) => {
       broadcast((socket) => {
         if (socket.winType != 'main' || !socket.isInited) return
         return socket.remote.hotKeyConfigUpdated(config)
+      })
+    },
+    async hotKeyEnabled(config) {
+      broadcast((socket) => {
+        if (socket.winType != 'main' || !socket.isInited) return
+        void socket.remote.hotKeyEnabled(config)
       })
     },
   } satisfies Partial<ExposeServerFunctions>

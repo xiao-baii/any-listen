@@ -2,7 +2,7 @@ import { STORE_NAMES } from '@any-listen/common/constants'
 import themes from '@any-listen/theme/index.json'
 
 import { appState as defaultAppState } from '@/app/app/state'
-import defaultGetStore from '@/app/shared/store'
+import { getStore as defaultGetStore } from '@/app/shared/store'
 import { joinPath, encodePath, isUrl } from '@/app/shared/utils'
 
 export const createThemeData = (appState: typeof defaultAppState, getStore: typeof defaultGetStore) => {

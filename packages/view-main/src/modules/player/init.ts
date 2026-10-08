@@ -4,12 +4,13 @@ import { settingEvent } from '@/modules/setting/store/event'
 import { settingState } from '@/modules/setting/store/state'
 import { createUnsubscriptionSet } from '@/shared'
 
-import { appEvent } from '../app/store/event'
+import { commandEvent } from '../command/event'
 import { initPlayer as initPlayerModules } from './init/index'
 import {
   initPlayHistoryList,
   initPlayInfo,
   initPlayList,
+  play,
   registerLocalPlayerAction,
   registerRemoteHistoryListAction,
   registerRemoteListAction,
@@ -54,6 +55,7 @@ const init = async (isInited: boolean) => {
     if (settingState.setting['player.isSavePlayTime']) {
       playerEvent.setProgress(info.time, info.maxTime)
     }
+    if (settingState.setting['player.startupAutoPlay']) play()
   }
   setInited(true)
 }
@@ -74,8 +76,8 @@ export const initPlayer = () => {
       subscriptions.add(registerRemoteHistoryListAction())
       subscriptions.add(registerRemoteListAction())
       subscriptions.add(
-        appEvent.on('executeCommand', (command) => {
-          if (command === 'showMusicComment') void showMusicComment()
+        commandEvent.register('showMusicComment', async () => {
+          await showMusicComment()
         })
       )
     })

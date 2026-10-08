@@ -210,6 +210,12 @@ export const settings: SettingListSection[] = [
         name: 'settings.player.media_session_lyric',
         type: 'boolean',
       },
+      // t('settings.player.s2t')
+      {
+        field: 'player.isS2t',
+        name: 'settings.player.s2t',
+        type: 'boolean',
+      },
       {
         field: 'player.ignoreLocalLyrics',
         name: 'settings.player.ignore_local_lyrics',
@@ -322,6 +328,25 @@ export const settings: SettingListSection[] = [
     ],
   },
   {
+    id: 'hotkey',
+    name: 'settings.hotkey',
+    // t('settings.hotkey')
+    list: [
+      {
+        type: 'component',
+        name: 'settings.hotkey.local',
+        component: async () => import('./Hotkey/HotkeyLocal.svelte'),
+      },
+      import.meta.env.VITE_IS_DESKTOP
+        ? {
+            type: 'component',
+            name: 'settings.hotkey.global',
+            component: async () => import('./Hotkey/HotkeyGlobal.svelte'),
+          }
+        : null,
+    ],
+  },
+  {
     id: 'extension',
     // t('settings.extension')
     name: 'settings.extension',
@@ -419,7 +444,7 @@ export const settings: SettingListSection[] = [
             description: 'settings.common.transparent_window_desc',
             type: 'boolean',
           },
-      // t('settings.common.enable_trash_desc')
+      // t('settings.tray.theme_id_auto')
       import.meta.env.VITE_IS_DESKTOP
         ? {
             field: 'common.enableTrash',
@@ -437,6 +462,7 @@ export const settings: SettingListSection[] = [
               { value: 0, name: 'settings.tray.theme_id_light' },
               { value: 2, name: 'settings.tray.theme_id_dark' },
               { value: 1, name: 'settings.tray.theme_id_origin' },
+              { value: -1, name: 'settings.tray.theme_id_auto' },
             ] satisfies Array<{ value: AnyListen.AppSetting['tray.themeId']; name: keyof Message }>,
           }
         : null,

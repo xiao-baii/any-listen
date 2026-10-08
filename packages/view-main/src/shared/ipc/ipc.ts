@@ -1,5 +1,6 @@
 import { account } from '@/accounts/state.svelte'
 import app from './app/remote'
+import command from './command/remote'
 import dislike from './dislike/remote'
 import extension from './extension/remote'
 import hotkey from './hotkey/remote'
@@ -32,6 +33,7 @@ export const connectIPC = (
     ...player,
     ...theme,
     ...sync,
+    ...command,
   }
   connectIPCService({
     clientCall: exposeFuncs,

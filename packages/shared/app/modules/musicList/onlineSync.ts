@@ -19,14 +19,15 @@ export const createOnlineListSync = (
   let running: Promise<void> | undefined
   let loading: Promise<void> | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
-  const pending = new Map<string, { resolve: () => void; reject: (error: unknown) => void; task: Promise<void> }>()
+  const pending = new Map<string, { resolve: () => void; reject: (error: unknown) => void; task: Promise<void>; automatic: boolean }>()
   const subscriptions: Array<() => void> = []
 
-  const sync = async (id: string) => {
+  const sync = async (id: string, automatic: boolean) => {
     // Reload the list after waiting: it may have been edited or removed meanwhile.
     const list = (await lists.getAllUserLists()).userList.find((list) => list.id === id)
     if (!list) return
     if (list.type !== 'online') throw new Error('Not an online list')
+    if (automatic && list.meta.autoSync !== true) return
     const [local, online] = await Promise.all([lists.getListMusics(id), detailAll(list)])
     if (closed) return
     const current = (await lists.getAllUserLists()).userList.find((item) => item.id === id)
@@ -39,7 +40,7 @@ export const createOnlineListSync = (
       })
     }
     if (closed) return
-    const updated = { ...current, meta: { ...current.meta, syncTime: Date.now() } }
+    const updated = { ...current, meta: { ...current.meta, songCount: online.length, syncTime: Date.now() } }
     await saveList(updated)
     await lists.sendMusicListAction({
       action: 'list_update',
@@ -50,7 +51,7 @@ export const createOnlineListSync = (
     while (!closed && pending.size) {
       const [id, item] = pending.entries().next().value!
       try {
-        await sync(id)
+        await sync(id, item.automatic)
         item.resolve()
       } catch (error) {
         item.reject(error)
@@ -68,10 +69,13 @@ export const createOnlineListSync = (
         startDrain()
       })
   }
-  const syncList = (list: AnyListen.List.OnlineListInfo) => {
+  const syncList = (list: AnyListen.List.OnlineListInfo, automatic = false) => {
     if (closed) return Promise.reject(new Error('Online list sync is closed'))
     const existing = pending.get(list.id)
-    if (existing) return existing.task
+    if (existing) {
+      if (!automatic) existing.automatic = false
+      return existing.task
+    }
     if (pending.size >= 128) return Promise.reject(new Error('Online list sync queue is full'))
     let resolve!: () => void
     let reject!: (error: unknown) => void
@@ -79,7 +83,7 @@ export const createOnlineListSync = (
       resolve = res
       reject = rej
     })
-    pending.set(list.id, { task, resolve, reject })
+    pending.set(list.id, { task, resolve, reject, automatic })
     startDrain()
     return task
   }
@@ -89,7 +93,7 @@ export const createOnlineListSync = (
       const userLists = (await lists.getAllUserLists()).userList
       for (const list of userLists) {
         if (closed) break
-        if (list.type === 'online') await syncList(list).catch(onError)
+        if (list.type === 'online' && list.meta.autoSync === true) await syncList(list, true).catch(onError)
       }
     })().finally(() => {
       loading = undefined
@@ -118,7 +122,7 @@ export const createOnlineListSync = (
   const schedule = (items: AnyListen.List.MyListInfo[]) => {
     if (closed) return
     for (const list of items) {
-      if (list.type === 'online') void syncList(list).catch(onError)
+      if (list.type === 'online' && list.meta.autoSync === true) void syncList(list, true).catch(onError)
     }
   }
   subscriptions.push(

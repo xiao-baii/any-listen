@@ -496,6 +496,7 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
           themeChanged: () => {},
           themeListChanged: () => {},
           hotKeyConfigUpdated: () => {},
+          hotKeyEnabled: () => {},
           dislikeAction: () => {},
           settingChanged: () => {},
           extensionEvent: (event: unknown) => { events.push(event) },
@@ -775,9 +776,19 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     await bRpc.remote.saveTheme({ ...theme, name: 'Bob theme' })
     assert.equal((await a2Rpc.remote.getThemeList()).userThemes[0].name, 'Alice theme')
     assert.equal((await bRpc.remote.getThemeList()).userThemes[0].name, 'Bob theme')
+    const onlineList = { id: 'sync-settings', name: 'Sync settings', type: 'online', parentId: null,
+      meta: { sourceType: 'songlist', extensionId: 'online-metadata', source: 'test', syncId: 'test', autoSync: false,
+        createTime: 0, updateTime: 0, playCount: 0, songCount: 0, posTime: 0, syncTime: 0 } }
+    await aRpc.remote.listAction({ action: 'list_create', data: { position: 0, listInfos: [onlineList] } })
+    onlineList.meta.autoSync = true
+    await aRpc.remote.listAction({ action: 'list_update', data: { lists: [onlineList] } })
+    assert.equal((await a2Rpc.remote.getAllUserLists()).userList.find((item: any) => item.id === 'sync-settings').meta.autoSync, true)
+    assert.equal((await bRpc.remote.getAllUserLists()).userList.some((item: any) => item.id === 'sync-settings'), false)
     const hotkey = await aRpc.remote.getHotKey()
-    hotkey.local.enable = false
-    await aRpc.remote.hotkeyConfigAction({ action: 'config', data: hotkey })
+    await aRpc.remote.hotkeyConfigAction({ action: 'enable', data: { type: 'local', enable: false } })
+    await aRpc.remote.hotkeyConfigAction({ action: 'config', data: { type: 'local', config: { 'ctrl+q': 'pause' } } })
+    assert.deepEqual((await a2Rpc.remote.getHotKey()).local.keys, { 'ctrl+q': 'pause' })
+    assert.deepEqual((await bRpc.remote.getHotKey()).local.keys, hotkey.local.keys)
     assert.equal((await a2Rpc.remote.getHotKey()).local.enable, false)
     assert.equal((await bRpc.remote.getHotKey()).local.enable, true)
     await aRpc.remote.dislikeAction({ action: 'dislike_data_overwrite', data: 'Alice private rule' })
@@ -808,8 +819,10 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     await runtimes.stop(alice.user.id)
     const restartedAlice = await rpc(alice, [])
     assert.equal((await restartedAlice.remote.getPlayInfo()).info.time, 123)
+    assert.equal((await restartedAlice.remote.getAllUserLists()).userList.find((item: any) => item.id === 'sync-settings').meta.autoSync, true)
     assert.equal((await restartedAlice.remote.getThemeList()).userThemes[0].name, 'Alice theme')
     assert.equal((await restartedAlice.remote.getHotKey()).local.enable, false)
+    assert.deepEqual((await restartedAlice.remote.getHotKey()).local.keys, { 'ctrl+q': 'pause' })
     assert.equal((await restartedAlice.remote.getDislikeInfo()).rules, 'alice private rule')
     const proxyPath = `/u/${alice.user.id}/api/p_url/${encodeURIComponent(mediaUrl)}`
     const range = await fetch(origin + proxyPath, { headers: { Cookie: alice.cookie, Range: 'bytes=2-5' } })

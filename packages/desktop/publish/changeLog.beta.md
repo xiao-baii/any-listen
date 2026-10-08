@@ -1,21 +1,21 @@
 <!--- @lang: en-us -->
 
-### Improved
+### Added
 
-- Improved multiline desktop lyrics mode so that the active line's line spacing is no longer scaled when scaling is disabled.
+- Added a **Save as Regular Playlist** button to song lists in the Online Resources section. Selecting it creates a regular playlist and adds the songs to it.
 
 ### Fixed
 
-- Fixed an issue where the window was not displayed on Linux when using Wayland.
+- Fixed an issue where the **Automatic Sync** option in online list settings could not be saved.
 
 ---
 
 <!--- @lang: zh-cn -->
 
-### 优化
+### 新增
 
-- 优化桌面歌词多行模式，未启用缩放时不再缩放激活行的行距。
+- 在线资源板块的歌曲列表中新增 **「收藏为普通列表」** 按钮，点击后会创建一个普通列表，并将当前列表中的歌曲添加到该列表。
 
 ### 修复
 
-- 修复 Linux 下使用 Wayland 时窗口不显示的问题。
+- 修复在线列表设置中的 **「自动同步」** 选项无法保存的问题。

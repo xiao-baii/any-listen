@@ -23,6 +23,7 @@
     listinfo,
     onscroll,
     onsave,
+    onsaveasgeneral,
     onreload,
     onplaymusic,
   }: {
@@ -35,6 +36,7 @@
     listinfo: ListInfo
     onscroll?: (pos: number) => void
     onsave?: () => Promise<void>
+    onsaveasgeneral?: () => Promise<void>
     onreload?: () => void
     onplaymusic?: (music: AnyListen.Music.MusicInfo, random?: boolean) => void
   } = $props()
@@ -108,6 +110,9 @@
         onsave={async () => {
           await onsave?.()
         }}
+        onsaveasgeneral={async () => {
+          await onsaveasgeneral?.()
+        }}
       />
     {:else}
       <Header
@@ -137,6 +142,9 @@
         }}
         onsave={async () => {
           await onsave?.()
+        }}
+        onsaveasgeneral={async () => {
+          await onsaveasgeneral?.()
         }}
       />
     {/if}

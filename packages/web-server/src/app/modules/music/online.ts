@@ -27,7 +27,7 @@ export const createOnlineMusic = (
     getMusicUrlByExtensionSource,
     getMusicUrl: getMusicUrlResource,
   } = resources
-  const { buildLyricInfo, getCachedLyricInfo, saveLyricInfo } = createMusicCache(appState, workers)
+  const { getCachedLyricInfo, saveLyricInfo } = createMusicCache(appState, workers)
 
   const getMusicUrlByExtSource = async ({
     musicInfo,
@@ -148,7 +148,7 @@ export const createOnlineMusic = (
   }): Promise<AnyListen.IPCMusic.MusicLyricInfo> => {
     if (!isRefresh) {
       const lyricInfo = await getCachedLyricInfo(musicInfo)
-      if (lyricInfo) return { info: await buildLyricInfo(lyricInfo), isFromCache: false }
+      if (lyricInfo) return { info: lyricInfo, isFromCache: false }
     }
     const info = await getMusicLyricByExtensionSource({
       musicInfo,
@@ -177,7 +177,7 @@ export const createOnlineMusic = (
       let isSave = true
       if (local) {
         if (remote.lyric === local.rawlrcInfo?.lyric) {
-          if (!isRefresh) return { info: await buildLyricInfo(local), isFromCache: true }
+          if (!isRefresh) return { info: local, isFromCache: true }
           isSave = false
         } else if (remote.lyric == local.lyric) {
           isSave = false
@@ -190,7 +190,7 @@ export const createOnlineMusic = (
       }
     }
     if (!isRefresh && local) {
-      return { info: await buildLyricInfo(local), isFromCache: true }
+      return { info: local, isFromCache: true }
     }
     throw new Error('get lyric info failed')
   }

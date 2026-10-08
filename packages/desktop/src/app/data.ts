@@ -1,7 +1,7 @@
 import { STORE_NAMES } from '@any-listen/common/constants'
 
 import defaultSetting from '@/shared/defaultSetting'
-import getStore from '@/shared/store'
+import { getStore } from '@/shared/store'
 
 import migrateSetting from './config/migrateSetting'
 import { appState } from './state'
@@ -85,7 +85,7 @@ export const saveSetting = (setting?: Partial<AnyListen.AppSetting>, isInit = fa
 /**
  * 初始化设置
  */
-export const getAppSetting = async () => {
+export const initAppSetting = async () => {
   const storeConfig = getStore(STORE_NAMES.APP_SETTINGS)
 
   let setting = storeConfig.get('setting') as AnyListen.AppSetting | undefined

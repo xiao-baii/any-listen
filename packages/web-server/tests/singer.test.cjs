@@ -146,7 +146,7 @@ test('snapshot replaces old queue/history, loops, randomizes, restores and retur
   `,
     {
       '@any-listen/web': 'export const checkPicUrl = async () => {}',
-      '@/modules/app/store/action': 'export const executeLocalCommand = () => {}',
+      '@/modules/command/actions': 'export const executeLocalCommand = () => {}',
       '@/modules/app/store/state': 'export const appState = {}',
       '@/modules/dislikeList/actions': 'export const addInfo = async () => {}',
       '@/modules/musicLibrary/store/actions':

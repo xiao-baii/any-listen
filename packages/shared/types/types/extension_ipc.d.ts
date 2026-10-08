@@ -291,7 +291,6 @@ declare namespace AnyListen {
         action: T,
         params: Parameters<ListProviderAction[T]>[0]
       ) => Promise<Awaited<ReturnType<ListProviderAction[T]>>>
-      executeCommand: (commandName: string, args: any[]) => Promise<unknown>
     }>
     type ServerIPCActions<Socket = undefined> = IPC.WarpIPCHandlerActions<Socket, ServerActions>
 
@@ -439,6 +438,16 @@ declare namespace AnyListen {
         options?: { finishFlush?: 'Z_FINISH' | 'Z_SYNC_FLUSH' }
       ) => Promise<T extends 'base64' ? string : Uint8Array>
       inflate: <T extends 'utf-8' | 'binary' = 'binary'>(
+        data: Uint8Array | string,
+        encoding?: T,
+        options?: { finishFlush?: 'Z_FINISH' | 'Z_SYNC_FLUSH' }
+      ) => Promise<T extends 'utf-8' ? string : Uint8Array>
+      gzip: <T extends 'base64' | 'binary' = 'binary'>(
+        data: Uint8Array | string,
+        encoding?: T,
+        options?: { finishFlush?: 'Z_FINISH' | 'Z_SYNC_FLUSH' }
+      ) => Promise<T extends 'base64' ? string : Uint8Array>
+      gunzip: <T extends 'utf-8' | 'binary' = 'binary'>(
         data: Uint8Array | string,
         encoding?: T,
         options?: { finishFlush?: 'Z_FINISH' | 'Z_SYNC_FLUSH' }

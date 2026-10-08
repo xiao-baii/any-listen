@@ -13,9 +13,11 @@
     maxheight,
     ontransitionend,
     onvisible,
+    btncls,
   }: {
     children: Snippet
     content: Snippet
+    btncls?: boolean
     debug?: boolean
     height?: string
     maxheight?: number
@@ -78,6 +80,7 @@
 <button
   bind:this={domBtn}
   class="container"
+  class:btn={btncls}
   onclick={handleShowPopup}
   onmouseenter={() => {
     if (!autoshow || !matchMedia('(hover: hover) and (pointer: fine)').matches) return
@@ -117,5 +120,31 @@
     padding: 0;
     background-color: transparent;
     border: none;
+
+    &.btn {
+      flex: none;
+      width: var(--size, 1.6rem);
+      aspect-ratio: 1 / 1;
+      padding: 0.25em;
+      font-size: 14px;
+      color: var(--btn-font, var(--color-button-font));
+      cursor: pointer;
+      background-color: var(--color-button-background);
+      border-radius: @form-radius;
+      // outline: none;
+      transition: @transition-normal;
+      transition-property: background-color, opacity;
+      &:hover {
+        background-color: var(--color-button-background-hover);
+      }
+      &:active {
+        background-color: var(--color-button-background-active);
+      }
+
+      :global(svg) {
+        width: 100%;
+        height: 100%;
+      }
+    }
   }
 </style>

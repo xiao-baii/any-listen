@@ -2,17 +2,12 @@
 
 ### Added
 
-- Added a **Show Current Song Playback Progress in Taskbar** option under _Settings > Playback Settings_ ([#279](https://github.com/any-listen/any-listen/issues/279)).
-- Added a **Song Source Switching** feature, available from the right-click menu for songs in the song list.
-- Added the built-in **Inter Variable** font as the preferred default font ([#278](https://github.com/any-listen/any-listen/issues/278)).
-- Added **Song Position Adjustment**, available from the song list context menu ([#302](https://github.com/any-listen/any-listen/issues/302)).
+- Added a **Save as Regular Playlist** button to song lists in the Online Resources section. Selecting it creates a regular playlist and adds the songs to it.
+- Added an **Automatic Sync** option to online list settings. Disabled by default.
 
-### Fixed
+### Changed
 
-- Fixed an issue where the file save dialog API could not select folders ([#285](https://github.com/any-listen/any-listen/issues/285)).
-- Fixed lyrics display issue when switching songs ([#284](https://github.com/any-listen/any-listen/issues/284)).
-- Fixed an issue where some lyrics did not wrap properly.
-- Fixed an issue with `setTimeout`-related APIs in the extension-isolated API environment ([#301](https://github.com/any-listen/any-listen/issues/301)).
+- Online lists no longer sync remote lists automatically by default, including previously created lists. To enable automatic syncing for a list, turn it on in that list's settings.
 
 ---
 
@@ -20,14 +15,9 @@
 
 ### 新增
 
-- 新增 **「在任务栏上显示当前歌曲播放进度」** 选项，位于 _设置 > 播放设置_（[#279](https://github.com/any-listen/any-listen/issues/279)）。
-- 新增 **「歌曲换源」** 功能，可在歌曲列表中通过歌曲右键菜单使用。
-- 新增内置 **「Inter Variable」** 字体作为首选默认字体（[#278](https://github.com/any-listen/any-listen/issues/278)）。
-- 新增 **「歌曲位置调整」** 功能，可在歌曲列表右键菜单中使用（[#302](https://github.com/any-listen/any-listen/issues/302)）。
+- 在线资源板块的歌曲列表中新增 **「收藏为普通列表」** 按钮，点击后会创建一个普通列表，并将当前列表中的歌曲添加到该列表。
+- 在线列表设置新增 **「自动同步」** 选项，默认关闭。
 
-### 修复
+### 变更
 
-- 修复文件保存弹窗 API 无法选择文件夹的问题（[#285](https://github.com/any-listen/any-listen/issues/285)）。
-- 修复切换歌曲时的歌词显示问题（[#284](https://github.com/any-listen/any-listen/issues/284)）。
-- 修复某些歌词不换行的问题。
-- 修复扩展隔离 API 环境的 `setTimeout` 相关 API 异常问题（[#301](https://github.com/any-listen/any-listen/issues/301)）。
+- 新创建的在线列表和已有在线列表默认不再自动同步远程列表。如需自动同步某个列表，可在该列表的设置中启用。

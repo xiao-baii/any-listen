@@ -271,6 +271,7 @@ test('online sync isolates tenants, removes trailing songs and persists sync tim
       ['b']
     )
     assert.ok(aDb.list().meta.syncTime)
+    assert.equal(aDb.list().meta.songCount, 1)
     assert.ok(bDb.list().meta.syncTime)
     assert.equal(aDb.writes.length, 1)
     assert.deepEqual(errors, [])
@@ -347,4 +348,68 @@ test('resource proxy instances isolate keys and cached files and cancel only the
     await nextTurn()
     await rm(root, { recursive: true, force: true })
   }
+})
+
+
+test('automatic sync defaults off, respects edits and leaves manual sync available', async () => {
+  let current = { id: 'online', type: 'online', meta: {} } as AnyListen.List.OnlineListInfo
+  let calls = 0
+  let fail = false
+  let writes = 0
+  const handlers = new Map<string, (...args: any[]) => void>()
+  const lists = {
+    getAllUserLists: async () => ({ userList: [structuredClone(current)] }),
+    getListMusics: async () => [music('old')],
+    sendMusicListAction: async (action: { action: string }) => { if (action.action === 'list_music_overwrite') writes++ },
+    musicListEvent: { on: (name: string, callback: (...args: any[]) => void) => { handlers.set(name, callback); return () => handlers.delete(name) } },
+  } as unknown as Parameters<typeof createOnlineListSync>[0]
+  const sync = createOnlineListSync(lists, async () => {
+    calls++
+    if (fail) throw new Error('source failed')
+    return [music('new')]
+  }, async item => { current = item }, () => {})
+  try {
+    await sync.syncAllList()
+    handlers.get('list_create')!(0, [current])
+    await nextTurn()
+    assert.equal(calls, 0)
+    await sync.syncList(current)
+    assert.equal(calls, 1)
+    current.meta.autoSync = true
+    handlers.get('list_update')!([current], false, false)
+    await nextTurn()
+    assert.equal(calls, 2)
+    current.meta.autoSync = false
+    await sync.syncAllList()
+    assert.equal(calls, 2)
+    fail = true
+    const before = writes
+    await assert.rejects(sync.syncList(current), /source failed/)
+    assert.equal(writes, before)
+  } finally { await sync.close() }
+})
+
+test('turning automatic sync off cancels queued and in-flight automatic results', async () => {
+  const items = ['first', 'queued'].map(id => ({ id, type: 'online', meta: { autoSync: true } })) as AnyListen.List.OnlineListInfo[]
+  let release!: () => void
+  const barrier = new Promise<void>(resolve => { release = resolve })
+  const calls: string[] = [], writes: unknown[] = []
+  let schedule!: (...args: any[]) => void
+  const lists = {
+    getAllUserLists: async () => ({ userList: structuredClone(items) }),
+    getListMusics: async () => [],
+    sendMusicListAction: async (action: unknown) => { writes.push(action) },
+    musicListEvent: { on: (name: string, callback: (...args: any[]) => void) => { if (name === 'list_create') schedule = callback; return () => {} } },
+  } as unknown as Parameters<typeof createOnlineListSync>[0]
+  const sync = createOnlineListSync(lists, async item => { calls.push(item.id); await barrier; return [music('new')] }, async () => {}, () => {})
+  try {
+    schedule(0, items)
+    await nextTurn()
+    items.forEach(item => { item.meta.autoSync = false })
+    release()
+    await nextTurn()
+    await sync.close()
+    assert.deepEqual(calls, ['first'])
+    assert.deepEqual(writes, [])
+  } finally { release(); await sync.close() }
 })

@@ -2,7 +2,6 @@ import { execSync, spawn } from 'node:child_process'
 import { builtinModules } from 'node:module'
 import path from 'node:path'
 
-import electron from 'electron'
 import type { UserConfig } from 'vite'
 
 const isProd = process.env.NODE_ENV == 'production'
@@ -13,6 +12,7 @@ export { Arch } from 'electron-builder'
 export { default as replaceLib } from './build-before-pack.cjs'
 
 export const runDesktop = (onLog: (data: Buffer, color: 'red' | 'blue') => void) => {
+  const electron = require('electron') as string
   let args = [
     '--inspect=5858',
     // 'NODE_ENV=development',
@@ -151,7 +151,6 @@ export const buildConfig = (mode: string): UserConfig => {
       __USER_API_PATH__: `"${path.join(projectPath, 'src/modules/userApi').replace(/\\/g, '\\\\')}"`,
       __GIT_COMMIT__: `"${gitInfo.commit_id}"`,
       __GIT_COMMIT_DATE__: `"${gitInfo.commit_date}"`,
-      __BUILD_WIN_LEGACY__: `${!!process.env.BUILD_WIN_LEGACY}`,
       // __QRC_DECODE_NODE_PATH__: `"${(isProd ? '../../build/Release' : path.join(rootPath, 'build/Release')).replace(/\\/g, '\\\\')}"`,
     },
     // cacheDir: path.join(rootPath, 'node_modules/.vite/main'),

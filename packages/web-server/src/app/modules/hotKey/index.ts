@@ -1,9 +1,8 @@
 import { hotKeyState as defaultHotKeyState } from '@any-listen/app/modules/hotkey'
 import { Event } from '@any-listen/app/modules/hotkey/event'
-import type { HOTKEY_Type } from '@any-listen/common/hotKey'
 import type { EventType } from '@any-listen/nodejs/Event'
 
-import defaultGetStore from '@/app/shared/store'
+import { getStore as defaultGetStore } from '@/app/shared/store'
 
 import { getHotKeyConfig as loadHotKeyConfig, saveHotKeyConfig } from './data'
 
@@ -11,7 +10,6 @@ export const createHotKeyModule = (getStore: typeof defaultGetStore) => {
   const event = new Event()
   const hotKeyEvent = event as EventType<Event>
   const hotKeyState: typeof defaultHotKeyState = {
-    tempDisable: false,
     config: { local: { enable: false, keys: {} }, global: { enable: false, keys: {} } },
     state: new Map(),
   }
@@ -26,28 +24,18 @@ export const createHotKeyModule = (getStore: typeof defaultGetStore) => {
     await initHotKeyState()
   }
 
-  const handleHotkeyConfigAction = async (action: AnyListen.HotKey.HotKeyActions<HOTKEY_Type>): Promise<boolean> => {
+  const handleHotkeyConfigAction = async (action: AnyListen.HotKey.HotKeyActions) => {
     switch (action.action) {
       case 'config':
-        // global.anylisten.event_app.saveConfig(data, source)
-        saveHotKeyConfig(action.data, getStore)
-        hotKeyState.config = action.data
-        hotKeyEvent.hot_key_config_update(action.data)
-        return true
+        hotKeyState.config[action.data.type].keys = action.data.config
+        saveHotKeyConfig(hotKeyState.config, getStore)
+        hotKeyEvent.config_updated(action.data)
+        break
       case 'enable':
-        hotKeyState.tempDisable = false
-        return true
-      case 'tempDisable':
-        hotKeyState.tempDisable = action.data
-        return true
-      case 'register':
-      case 'unregister':
-        return true
-      default:
-        console.warn('unknown action:', action)
-        // eslint-disable-next-line no-case-declarations, @typescript-eslint/no-unused-vars
-        let unknownAction: never = action
-        return false
+        hotKeyState.config[action.data.type].enable = action.data.enable
+        saveHotKeyConfig(hotKeyState.config, getStore)
+        hotKeyEvent.enable_chenged(action.data)
+        break
     }
   }
 

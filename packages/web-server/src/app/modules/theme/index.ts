@@ -3,7 +3,7 @@ import type { EventType } from '@any-listen/nodejs/Event'
 
 import { appEvent as defaultAppEvent } from '@/app/app/event'
 import { appState as defaultAppState } from '@/app/app/state'
-import defaultGetStore from '@/app/shared/store'
+import { getStore as defaultGetStore } from '@/app/shared/store'
 
 import { createThemeData } from './data'
 
