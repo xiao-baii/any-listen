@@ -1,8 +1,8 @@
 {
-  "singer_all": "All singers",
   "singer_label": "Singer",
   "singer_play_loop": "Loop play",
-  "singer_unsupported": "Singer search is not supported",
+  "singer_unsupported": "No singer metadata extension is enabled. Ask the administrator to install and publish one.",
+  "singer_source_unavailable": "This singer source is unavailable. Check that its extension is enabled and published.",
   "singer_search": "Search singers",
   "app_name": "Any Listen",
   "batch_select": "Bulk selection",

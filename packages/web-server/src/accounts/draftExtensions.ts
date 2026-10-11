@@ -11,7 +11,6 @@ import { createMessage2Call } from 'message2call'
 import { request, type NeedBodyType } from '@any-listen/nodejs/request'
 import { pack } from '@any-listen/nodejs/tar'
 
-import { extensionIds } from './publications'
 
 const operations = new Set(['getLocalExtensionList', 'getOnlineExtensionList', 'getOnlineExtensionDetail',
   'getOnlineCategories', 'getOnlineTags', 'downloadAndParseExtension', 'installExtension', 'updateExtension',
@@ -147,7 +146,6 @@ export const createDraftExtensions = (options: {
           if (typeof args[0] !== 'string' || !/^https?:\/\//.test(args[0])) throw new Error('Use an HTTP extension package URL')
           if (staged.size >= 8) throw new Error('Too many staged extension packages; reopen the player')
           const item = await service.downloadAndParseExtension(args[0], args[1] as any)
-          if (!extensionIds.includes(item.id as typeof extensionIds[number])) throw new Error('Unsupported managed extension')
           const token = randomUUID()
           staged.set(token, item)
           return { ...item, directory: token }
@@ -160,8 +158,6 @@ export const createDraftExtensions = (options: {
           staged.delete(token)
           return result
         }
-        if (['enableExtension', 'disableExtension', 'uninstallExtension', 'updateExtensionSettings'].includes(name) &&
-          !extensionIds.includes(args[0] as typeof extensionIds[number])) throw new Error('Unsupported managed extension')
         return (service[name as keyof ExtensionSeriveTypes] as (...args: unknown[]) => Promise<unknown>)(...args)
       })
     },
@@ -218,7 +214,6 @@ export const createDraftExtensions = (options: {
         const file = path.join(options.directory, EXTENSION.tempDirName, randomUUID() + '.alix')
         await writeFile(file, content)
         const item = await service.downloadAndParseExtension(file)
-        if (!extensionIds.includes(item.id as typeof extensionIds[number])) throw new Error('Unsupported managed extension')
         const list = await service.getLocalExtensionList()
         return list.some(extension => extension.id === item.id) ? service.updateExtension(item) : service.installExtension(item)
       })

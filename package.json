@@ -21,7 +21,10 @@
     "pub:web": "pnpm -F @shared/publish pub --type=web-server --commit",
     "fmt": "oxfmt",
     "verify-notes": "node scripts/notes/verify.cjs",
-    "test:singer": "node --test packages/web-server/tests/singer.test.cjs"
+    "test:singer": "node --test packages/web-server/tests/singer.test.cjs",
+    "build:singer-extension": "node extensions/singer-metadata/build.cjs",
+    "test:singer-extension": "node --test extensions/singer-metadata/tests/singer.test.cjs",
+    "test:singer-extension:live": "node extensions/singer-metadata/tests/live.cjs"
   },
   "devDependencies": {
     "@any-listen/eslint": "workspace:@shared/eslint@^",

@@ -77,7 +77,7 @@
     </div>
   {:else}
     <Btn onclick={() => { pushRoute('/online', { t: 'search', qt: 'singer' }) }}>{$t('singer_search')}</Btn>
-    {#if id}<Empty label={$t('singer_unsupported')} />{/if}
+    {#if id}<Empty label={$t('singer_source_unavailable')} />{/if}
   {/if}
 </div>
 

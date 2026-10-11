@@ -3,16 +3,15 @@ import type { ExtensionSeriveTypes } from '@any-listen/app/modules/worker/utils'
 
 // The supported loader reports asynchronous LX initialization through this stable log marker.
 // Fail closed on unknown loader behavior; package evaluation alone is not readiness.
-export const verifyManagedExtensions = async (
+export const verifyExtensions = async (
   service: Pick<ExtensionSeriveTypes, 'getLocalExtensionList' | 'getExtensionConfigValues'>,
   startupLogs: string[]
 ) => {
   const extensions = await service.getLocalExtensionList()
-  for (const id of ['online-metadata', 'lx-api-source-loader']) {
-    const extension = extensions.find((e) => e.id === id)
-    if (!extension || (extension.enabled && !extension.loaded)) throw new Error(`Managed extension failed: ${id}`)
+  for (const extension of extensions) {
+    if (extension.enabled && !extension.loaded) throw new Error(`Extension failed: ${extension.id}`)
   }
-  if (!extensions.find((e) => e.id === 'lx-api-source-loader')!.enabled) return
+  if (!extensions.find((e) => e.id === 'lx-api-source-loader')?.enabled) return
   const config = await service.getExtensionConfigValues('lx-api-source-loader', ['enabledScripts', 'importedScriptSources'])
   const infos = config.importedScriptSources as Array<{ id: string; name: string }>
   const names = (config.enabledScripts as string[]).map((id) => infos.find((info) => info.id === id)?.name)

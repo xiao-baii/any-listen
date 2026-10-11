@@ -1,8 +1,8 @@
 {
-  "singer_all": "全部歌手",
   "singer_label": "歌手",
   "singer_play_loop": "循环播放",
-  "singer_unsupported": "不支持歌手搜索",
+  "singer_unsupported": "没有已启用的歌手元数据扩展，请联系管理员安装并发布",
+  "singer_source_unavailable": "当前歌手来源不可用，请检查扩展是否已启用并发布",
   "singer_search": "搜索歌手",
   "app_name": "Any Listen",
   "batch_select": "批量选择",

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Header from './Header.svelte'
-  import Selection from '@/components/base/Selection.svelte'
-  import { filterSinger, getSingerOptions } from '@any-listen/common/singers'
+  import Input from '@/components/base/Input.svelte'
+  import { filterSinger } from '@any-listen/common/singers'
   import { playMusicCollection } from '@/modules/player/store/playerActions'
   import { t } from '@/plugins/i18n'
   import { playMusic } from './List/action'
@@ -40,18 +40,14 @@
     onreload?: () => void
     onplaymusic?: (music: AnyListen.Music.MusicInfo, random?: boolean) => void
   } = $props()
-  let selectedSinger = $state('')
+  let singerQuery = $state('')
   let singerListId = $state('')
   $effect(() => {
     const id = listinfo.id
-    untrack(() => { selectedSinger = ''; singerListId = id })
+    untrack(() => { singerQuery = ''; singerListId = id })
   })
-  const singer = $derived(singerListId === listinfo.id && source === 'local' ? selectedSinger : '')
+  const singer = $derived(singerListId === listinfo.id && source === 'local' ? singerQuery.trim() : '')
   const visibleList = $derived(filterSinger(list, singer))
-  const singerOptions = $derived([
-    { name: '', label: $t('singer_all') },
-    ...getSingerOptions(list).map(({ name, count }) => ({ name, label: name + ' · ' + count })),
-  ])
   const handlePlay = async (music: AnyListen.Music.MusicInfo, random = false, fromHeader = false) => {
     if (!music || loading || error) return
     if (onplaymusic) { onplaymusic(music, fromHeader ? random : undefined); return }
@@ -150,13 +146,10 @@
     {/if}
   {/if}
   {#if source === 'local'}
-    <div class="singer-filter">
+    <label class="singer-filter">
       <span>{$t('singer_label')}</span>
-      <Selection arialabel={$t('singer_label')} value={singer} list={singerOptions} itemkey="name" itemname="label" onchange={(value) => {
-        selectedSinger = value
-        singerListId = listinfo.id
-      }} />
-    </div>
+      <Input type="search" bind:value={singerQuery} placeholder={$t('singer_search')} />
+    </label>
   {/if}
   <List
     bind:this={musicList}
@@ -182,9 +175,7 @@
     gap: 8px;
     padding: 8px 12px;
     min-width: 0;
-    --selection-width: min(300px, calc(100vw - 110px));
-    :global(.button), :global(.list-item) { min-height: 44px; }
-    :global(.label) { min-width: 0; }
+    :global(.input) { width: min(300px, calc(100vw - 110px)); min-width: 0; min-height: 44px; box-sizing: border-box; }
   }
   .container {
     position: relative;

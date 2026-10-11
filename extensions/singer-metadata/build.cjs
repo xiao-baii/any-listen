@@ -1,0 +1,16 @@
+const { createRequire } = require('node:module')
+const { mkdir, copyFile } = require('node:fs/promises')
+const path = require('node:path')
+const scripts = createRequire(path.resolve(__dirname, '../../packages/shared/scripts/package.json'))
+const nodejs = createRequire(path.resolve(__dirname, '../../packages/shared/nodejs/package.json'))
+const manifest = require('./manifest.json')
+async function build() {
+  const output = path.join(__dirname, 'dist')
+  await mkdir(output, { recursive: true })
+  await scripts('esbuild').build({ entryPoints: [path.join(__dirname, 'src/index.cjs')], bundle: true, platform: 'neutral', format: 'cjs', external: ['any-listen'], outfile: path.join(output, 'main.js') })
+  for (const name of ['manifest.json', 'README.md', 'LICENSE']) await copyFile(path.join(__dirname, name), path.join(output, name))
+  const file = path.join(output, `${manifest.id}_v${manifest.version}.alix`)
+  await nodejs('tar').c({ cwd: output, file, gzip: true, portable: true }, ['manifest.json', 'main.js', 'README.md', 'LICENSE'])
+  console.log(file)
+}
+build().catch(error => { console.error(error); process.exitCode = 1 })

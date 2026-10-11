@@ -74,20 +74,20 @@ test('ordinary users may search singers and read works without gaining extension
   await assert.rejects(rpc.installExtension(), /Forbidden/)
 })
 
-test('singer matching follows existing separators, counts duets once and excludes empty artists', async () => {
-  const { splitSingers, filterSinger, getSingerOptions } = await load(`export * from './packages/shared/common/singers'`)
+test('singer search matches names partially, ignores case and whitespace, and preserves song order', async () => {
+  const { splitSingers, filterSinger } = await load(`export * from './packages/shared/common/singers'`)
   assert.deepEqual(splitSingers('甲 / 乙;甲'), ['甲', '乙'])
   const list = [music('solo'), music('duet', '甲、乙'), music('other', '甲乙'), music('empty', '')]
   assert.deepEqual(
     filterSinger(list, '甲').map((m) => m.id),
-    ['solo', 'duet']
+    ['solo', 'duet', 'other']
   )
-  assert.deepEqual(getSingerOptions(list), [
-    { name: '甲', count: 2 },
-    { name: '乙', count: 1 },
-    { name: '甲乙', count: 1 },
-  ])
+  assert.deepEqual(filterSinger(list, '乙').map((m) => m.id), ['duet', 'other'])
+  assert.deepEqual(filterSinger(list, '不存在'), [])
+  const english = [music('solo', 'Adele'), music('duet', 'Adele / Someone'), { ...music('title', 'Other'), name: 'Adele' }]
+  assert.deepEqual(filterSinger(english, '  ADE  ').map((m) => m.id), ['solo', 'duet'])
   assert.equal(filterSinger(list, ''), list)
+  assert.equal(filterSinger(list, '   '), list)
 })
 
 test('test extension supplies singer search and works through SDK validation and the resource service', async () => {

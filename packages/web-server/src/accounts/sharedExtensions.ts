@@ -11,7 +11,7 @@ import { DEFAULT_LANG, EXTENSION } from '@any-listen/common/constants'
 import defaultSetting from '@any-listen/common/defaultSetting'
 import { createMessage2Call } from 'message2call'
 
-import { verifyManagedExtensions } from './extensionHealth'
+import { verifyExtensions } from './extensionHealth'
 
 type SourceService = Pick<ExtensionSeriveTypes,
   'setExtensionState' | 'loadLocalExtensions' | 'startExtensions' | 'resourceAction' |
@@ -296,13 +296,13 @@ export class SharedExtensions {
       const extensions = await rpc.remote.getLocalExtensionList()
       for (const extension of extensions) {
         if (
-          extension.grant.some((grant) => grant === 'player' || grant === 'music_list') ||
-          extension.contributes.listProviders?.length
+          extension.enabled &&
+          (extension.grant.some((grant) => grant === 'player' || grant === 'music_list') || extension.contributes.listProviders?.length)
         )
           throw new Error(`Public source requires personal capabilities: ${extension.id}`)
       }
       await rpc.remote.startExtensions()
-      await verifyManagedExtensions(rpc.remote, startupLogs)
+      await verifyExtensions(rpc.remote, startupLogs)
       checkingStartup = false
       startupLogs.length = 0
       for (let attempt = 0; ; attempt++) {

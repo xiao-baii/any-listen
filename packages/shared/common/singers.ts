@@ -9,13 +9,7 @@ export const splitSingers = (singer: string) => [
   ),
 ]
 
-export const getSingerOptions = (list: AnyListen.Music.MusicInfo[]) => {
-  const counts = new Map<string, number>()
-  for (const music of list) {
-    for (const singer of splitSingers(music.singer)) counts.set(singer, (counts.get(singer) ?? 0) + 1)
-  }
-  return [...counts].map(([name, count]) => ({ name, count }))
+export const filterSinger = (list: AnyListen.Music.MusicInfo[], singer: string) => {
+  const query = singer.trim().toLowerCase()
+  return query ? list.filter((music) => splitSingers(music.singer).some((name) => name.toLowerCase().includes(query))) : list
 }
-
-export const filterSinger = (list: AnyListen.Music.MusicInfo[], singer: string) =>
-  singer ? list.filter((music) => splitSingers(music.singer).includes(singer)) : list

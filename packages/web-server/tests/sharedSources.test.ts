@@ -86,7 +86,7 @@ test(
     )
     const directory = path.join(root, 'release')
     const manifest = {
-      id: 'online-metadata',
+      id: 'fixture-metadata',
       name: 'Fixture',
       main: 'index.js',
       version: '1.0.0',
@@ -95,45 +95,43 @@ test(
     const request = (name = '') => [
       'musicUrl',
       {
-        extensionId: 'online-metadata',
+        extensionId: 'fixture-metadata',
         source: 'test',
         musicInfo: { id: 'test', name, singer: '', interval: null, isLocal: false, meta: { source: 'test', musicId: 'test' } },
       },
     ]
     try {
-      for (const id of ['online-metadata', 'lx-api-source-loader']) {
-        await mkdir(path.join(directory, 'ext', id), { recursive: true })
-        await writeFile(path.join(directory, 'ext', id, 'manifest.json'), JSON.stringify({ ...manifest, id }))
-        await writeFile(
-          path.join(directory, 'ext', id, 'index.js'),
-          `
-        const api = require('any-listen'); let calls = 0;
-        api.logcat.info('extension-log-persistence-marker');
-        api.registerResourceAction({
-          singerSearch: async ({ keyword, page }) => ({ list: [{ id: 'artist', name: keyword }], total: 1, page, limit: 30 }),
-          singer: async ({ id, page }) => ({ list: [], info: { id, name: 'Fixture singer' }, total: 0, page, limit: 30 }),
-          musicUrl: async ({ musicInfo }) => {
-          if (musicInfo.name === 'invalid') return { url: '', quality: 'invalid' };
-          if (musicInfo.name === 'private') await api.app.showInputDialog({ title: 'Private login' });
-          if (musicInfo.name === 'hang') return new Promise(() => {});
-          const n = ++calls;
-          await new Promise(resolve => setTimeout(resolve, 20));
-          return { url: 'https://example.com/' + n + '.mp3', quality: '128k' };
-        } });
+      const id = manifest.id
+      await mkdir(path.join(directory, 'ext', id), { recursive: true })
+      await writeFile(path.join(directory, 'ext', id, 'manifest.json'), JSON.stringify({ ...manifest, id }))
+      await writeFile(
+        path.join(directory, 'ext', id, 'index.js'),
+        `
+      const api = require('any-listen'); let calls = 0;
+      api.logcat.info('extension-log-persistence-marker');
+      api.registerResourceAction({
+        singerSearch: async ({ keyword, page }) => ({ list: [{ id: 'artist', name: keyword }], total: 1, page, limit: 30 }),
+        singer: async ({ id, page }) => ({ list: [], info: { id, name: 'Fixture singer' }, total: 0, page, limit: 30 }),
+        musicUrl: async ({ musicInfo }) => {
+        if (musicInfo.name === 'invalid') return { url: '', quality: 'invalid' };
+        if (musicInfo.name === 'private') await api.app.showInputDialog({ title: 'Private login' });
+        if (musicInfo.name === 'hang') return new Promise(() => {});
+        const n = ++calls;
+        await new Promise(resolve => setTimeout(resolve, 20));
+        return { url: 'https://example.com/' + n + '.mp3', quality: '128k' };
+      } });
       `
-        )
-      }
+      )
       await writeFile(
         path.join(directory, 'extensions.json'),
         JSON.stringify([
-          { id: 'online-metadata', enabled: true },
-          { id: 'lx-api-source-loader', enabled: false },
+          { id: 'fixture-metadata', enabled: true },
         ])
       )
       const snapshot = await readFile(path.join(directory, 'extensions.json'), 'utf8')
       await host.switch('one', directory, [], '')
       assert.equal(await readFile(path.join(directory, 'extensions.json'), 'utf8'), snapshot)
-      const singerParams = { extensionId: 'online-metadata', source: 'test', page: 1 }
+      const singerParams = { extensionId: 'fixture-metadata', source: 'test', page: 1 }
       const searchResult = await host.call('resourceAction', ['singerSearch', { ...singerParams, keyword: 'Fixture singer' }])
       assert.equal(
         (searchResult.value as AnyListen.IPCExtension.ListCommonResult<AnyListen.Resource.SingerItem>).list[0].id,
@@ -157,25 +155,30 @@ test(
       await new Promise((resolve) => setTimeout(resolve, 50))
       await host.switch('two', directory, [], '')
       await rejected
-      const logFile = path.join(logDirectory, 'online-metadata', 'output.log')
+      const logFile = path.join(logDirectory, 'fixture-metadata', 'output.log')
       const persisted = await readFile(logFile, 'utf8')
       assert.equal(persisted.split('extension-log-persistence-marker').length - 1, 2)
-      const pageLogs = (await host.call('getExtensionLastLogs', ['online-metadata'])).value as Array<{ logs: string }>
+      const pageLogs = (await host.call('getExtensionLastLogs', ['fixture-metadata'])).value as Array<{ logs: string }>
       assert.match(pageLogs[0].logs, /extension-log-persistence-marker/)
-      await host.call('clearExtensionLogs', ['online-metadata'])
+      await host.call('clearExtensionLogs', ['fixture-metadata'])
       assert.equal(await readFile(logFile, 'utf8'), '')
       assert.equal(host.status().workers, 1)
       assert.equal(((await host.call('resourceAction', request())).value as { url: string }).url, 'https://example.com/1.mp3')
       await assert.rejects(host.call('resourceAction', request('private')), /personal capability/)
       await host.stop()
       await writeFile(
-        path.join(directory, 'ext/online-metadata/manifest.json'),
+        path.join(directory, 'ext/fixture-metadata/manifest.json'),
         JSON.stringify({ ...manifest, grant: ['music_list'] })
       )
       await assert.rejects(host.switch('private', directory, [], ''), /personal capabilities/)
       assert.equal(host.status().workers, 0)
       assert.deepEqual((await host.call('getLocalExtensionList', [])).value, [])
-      await writeFile(path.join(directory, 'ext/online-metadata/manifest.json'), JSON.stringify(manifest))
+      await writeFile(path.join(directory, 'extensions.json'), JSON.stringify([{ id: manifest.id, enabled: false }]))
+      await host.switch('private-disabled', directory, [], '')
+      assert.deepEqual(((await host.call('getResourceList', [])).value as AnyListen.Extension.ResourceList).resources, {})
+      await host.stop()
+      await writeFile(path.join(directory, 'extensions.json'), snapshot)
+      await writeFile(path.join(directory, 'ext/fixture-metadata/manifest.json'), JSON.stringify(manifest))
       await host.switch('restored', directory, [], '')
       const saturation = Array.from({ length: 128 }, () => host.call('resourceAction', request()))
       const draining = Promise.allSettled(saturation)

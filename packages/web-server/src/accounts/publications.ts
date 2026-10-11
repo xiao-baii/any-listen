@@ -6,7 +6,6 @@ import type { Accounts, User } from './database'
 import { Runtimes } from './runtime'
 import { fail } from './security'
 
-export const extensionIds = ['online-metadata', 'lx-api-source-loader'] as const
 const readJSON = async (file: string) => JSON.parse(await readFile(file, 'utf8'))
 export const safeCopy = async (source: string, target: string) => {
   const info = await lstat(source)
@@ -19,17 +18,19 @@ export const safeCopy = async (source: string, target: string) => {
 }
 export const snapshotExtensions = async (source: string, target: string) => {
   await mkdir(target, { recursive: true })
-  const settings = (await readJSON(path.join(source, 'extensions.json'))) as Array<{ id: string; enabled: boolean }>
-  const selected = settings
-    .filter((item) => extensionIds.includes(item.id as (typeof extensionIds)[number]))
-    .map(({ id, enabled }) => ({ id, enabled }))
+  const settings = (await readJSON(path.join(source, 'extensions.json')).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return []
+    throw error
+  })) as Array<{ id: string; enabled: boolean }>
+  const selected = settings.map(({ id, enabled }) => ({ id, enabled }))
   if (
-    new Set(selected.map((s) => s.id)).size !== 2 ||
-    selected.length !== 2 ||
-    selected.some((s) => typeof s.enabled !== 'boolean')
+    new Set(selected.map((s) => s.id)).size !== selected.length ||
+    selected.some((s) =>
+      typeof s.id !== 'string' || !/^[\w.-]+$/.test(s.id) || s.id === '.' || s.id === '..' || typeof s.enabled !== 'boolean'
+    )
   )
-    fail(400, 'Install both managed extensions before publishing')
-  for (const id of extensionIds) {
+    fail(400, 'Invalid extension settings')
+  for (const { id, enabled } of selected) {
     const packages = await readdir(path.join(source, 'ext'))
     const matches: string[] = []
     for (const name of packages) {
@@ -41,8 +42,8 @@ export const snapshotExtensions = async (source: string, target: string) => {
     const manifest = await readJSON(path.join(packagePath, 'manifest.json'))
     if (manifest.id !== id) fail(400, 'Extension manifest does not match its directory')
     if (
-      manifest.grant?.some((grant: string) => ['player', 'music_list'].includes(grant)) ||
-      manifest.contributes?.listProviders?.length
+      enabled &&
+      (manifest.grant?.some((grant: string) => ['player', 'music_list'].includes(grant)) || manifest.contributes?.listProviders?.length)
     )
       fail(400, `Public source requires personal capabilities: ${id}`)
     await safeCopy(packagePath, path.join(target, 'ext', id))
@@ -54,7 +55,7 @@ export const snapshotExtensions = async (source: string, target: string) => {
     if (!config || typeof config !== 'object' || Array.isArray(config)) fail(400, `Invalid configuration for ${id}`)
     await mkdir(path.join(target, 'datas', id), { recursive: true })
     await writeFile(path.join(target, 'datas', id, 'configuration.json'), JSON.stringify(config))
-    if (id === 'lx-api-source-loader') {
+    if (id === 'lx-api-source-loader' && enabled) {
       const scripts = config.importedScriptSources ?? []
       if (!Array.isArray(scripts) || !Array.isArray(config.enabledScripts ?? [])) fail(400, 'Invalid source configuration')
       const ids = scripts.map((item: { id: string }) => item.id)
@@ -62,15 +63,15 @@ export const snapshotExtensions = async (source: string, target: string) => {
         fail(400, 'Invalid script identifier')
       if (new Set(ids).size !== ids.length) fail(400, 'Duplicate script identifier')
       if ((config.enabledScripts ?? []).some((id: string) => !ids.includes(id))) fail(400, 'Enabled script is missing')
-      if (selected.find((s) => s.id === id)?.enabled && !(config.enabledScripts ?? []).length)
-        fail(400, 'Enable at least one LX source script before publishing')
-      await mkdir(path.join(target, 'datas', id, 'storage', 'scripts'), { recursive: true })
-      for (const scriptId of ids)
-        await safeCopy(
-          path.join(source, 'datas', id, 'storage', 'scripts', scriptId),
-          path.join(target, 'datas', id, 'storage', 'scripts', scriptId)
-        )
+      if (!(config.enabledScripts ?? []).length) fail(400, 'Enable at least one LX source script before publishing')
+      for (const scriptId of ids) await lstat(path.join(source, 'datas', id, 'storage', 'scripts', scriptId))
     }
+    const storage = path.join(source, 'datas', id, 'storage')
+    const storageInfo = await lstat(storage).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (storageInfo) await safeCopy(storage, path.join(target, 'datas', id, 'storage'))
   }
   await writeFile(path.join(target, 'extensions.json'), JSON.stringify(selected))
 }

@@ -372,7 +372,7 @@ test('revoking a session blocks an administrator request still uploading its bod
   }
 })
 
-test('publication snapshots contain only managed data and validate script references', async () => {
+test('publication snapshots contain configuration and standard storage, and validate LX script references', async () => {
   const dir = await workspace(),
     source = path.join(dir, 'draft'),
     target = path.join(dir, 'release')
@@ -399,6 +399,34 @@ test('publication snapshots contain only managed data and validate script refere
     await snapshotExtensions(source, target)
     await assert.rejects(readFile(path.join(target, 'datas/online-metadata/private-runtime.json')))
     assert.equal(await readFile(path.join(target, 'datas/lx-api-source-loader/storage/scripts', scriptId), 'utf8'), 'script')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('publication accepts arbitrary IDs, disabled personal extensions and empty installations', async () => {
+  const dir = await workspace()
+  const source = path.join(dir, 'draft')
+  const target = path.join(dir, 'release')
+  try {
+    await snapshotExtensions(source, target)
+    assert.deepEqual(JSON.parse(await readFile(path.join(target, 'extensions.json'), 'utf8')), [])
+    const id = 'third.party'
+    await mkdir(path.join(source, 'ext', id), { recursive: true })
+    await writeFile(path.join(source, 'ext', id, 'manifest.json'), JSON.stringify({ id, grant: ['player'] }))
+    await mkdir(path.join(source, 'datas', id, 'storage'), { recursive: true })
+    await writeFile(path.join(source, 'datas', id, 'storage', 'settings.txt'), 'persisted')
+    await writeFile(path.join(source, 'datas', id, 'runtime.json'), 'excluded')
+    await writeFile(path.join(source, 'extensions.json'), JSON.stringify([{ id, enabled: false }]))
+    await snapshotExtensions(source, target)
+    assert.equal(await readFile(path.join(target, 'datas', id, 'storage', 'settings.txt'), 'utf8'), 'persisted')
+    await assert.rejects(readFile(path.join(target, 'datas', id, 'runtime.json')))
+    await writeFile(path.join(source, 'extensions.json'), JSON.stringify([{ id, enabled: true }]))
+    await assert.rejects(snapshotExtensions(source, target), /personal capabilities/)
+    await writeFile(path.join(source, 'extensions.json'), JSON.stringify([{ id: '../escape', enabled: false }]))
+    await assert.rejects(snapshotExtensions(source, target), /Invalid extension settings/)
+    await writeFile(path.join(source, 'extensions.json'), JSON.stringify([{ id, enabled: false }, { id, enabled: false }]))
+    await assert.rejects(snapshotExtensions(source, target), /Invalid extension settings/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

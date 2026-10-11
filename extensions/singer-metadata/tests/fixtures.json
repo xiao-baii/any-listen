@@ -1,0 +1,465 @@
+{
+  "wy": {
+    "search": {
+      "result": {
+        "hasMore": true,
+        "artistCount": 83,
+        "hlWords": [
+          "周杰伦"
+        ],
+        "artists": [
+          {
+            "id": 6452,
+            "name": "周杰伦",
+            "picUrl": "https://p2.music.126.net/NWv6PtSBkyWZzqbJVzBr7g==/109951169164936450.jpg"
+          },
+          {
+            "id": 51128649,
+            "name": "周杰伦.",
+            "picUrl": "https://p2.music.126.net/IovRQwvXgZ234gCtiVHFyQ==/109951168883440426.jpg"
+          }
+        ],
+        "searchQcReminder": null
+      },
+      "code": 200
+    },
+    "info": {
+      "code": 200,
+      "data": {
+        "artist": {
+          "id": 6452,
+          "name": "周杰伦",
+          "cover": "http://p2.music.126.net/NWv6PtSBkyWZzqbJVzBr7g==/109951169164936450.jpg"
+        }
+      }
+    },
+    "detail": {
+      "code": 200,
+      "total": 566,
+      "songs": [
+        {
+          "id": 298317,
+          "name": "屋顶",
+          "artists": [
+            {
+              "name": "温岚"
+            },
+            {
+              "name": "周杰伦"
+            }
+          ],
+          "album": {
+            "id": 29597,
+            "name": "有点野",
+            "picUrl": "https://p2.music.126.net/t1KaAJmIphZKdPq8JfItbA==/109951170514287417.jpg"
+          },
+          "duration": 319039,
+          "lMusic": {
+            "volumeDelta": -32841,
+            "playTime": 319039,
+            "bitrate": 128001,
+            "dfsId": 0,
+            "sr": 44100,
+            "name": "",
+            "id": 6709987428,
+            "size": 5105833,
+            "extension": "mp3"
+          },
+          "hMusic": {
+            "volumeDelta": -37140,
+            "playTime": 319039,
+            "bitrate": 320001,
+            "dfsId": 0,
+            "sr": 44100,
+            "name": "",
+            "id": 6709986424,
+            "size": 12764517,
+            "extension": "mp3"
+          },
+          "sqMusic": {
+            "volumeDelta": -37132,
+            "playTime": 319039,
+            "bitrate": 1619359,
+            "dfsId": 0,
+            "sr": 44100,
+            "name": "",
+            "id": 6709986423,
+            "size": 64579972,
+            "extension": "flac"
+          },
+          "hrMusic": null
+        }
+      ]
+    }
+  },
+  "tx": {
+    "search": {
+      "code": 0,
+      "req": {
+        "code": 0,
+        "data": {
+          "body": {
+            "singer": [
+              {
+                "singerMID": "0025NhlN2yWrP4",
+                "singerName": "周杰伦",
+                "singerPic": "http://y.gtimg.cn/music/photo_new/T001R150x150M0000025NhlN2yWrP4_11.jpg"
+              },
+              {
+                "singerMID": "00489l610k75Z2",
+                "singerName": "Lara梁心颐",
+                "singerPic": "http://y.gtimg.cn/music/photo_new/T001R150x150M00000489l610k75Z2_4.jpg"
+              }
+            ]
+          },
+          "meta": {
+            "sum": 11,
+            "is_filter": 0
+          }
+        }
+      }
+    },
+    "detail": {
+      "code": 0,
+      "req": {
+        "code": 0,
+        "data": {
+          "total_song": 1012,
+          "singer_info": {
+            "area": 0,
+            "attribute4": 0,
+            "genre": 0,
+            "other_name": "",
+            "id": 4558,
+            "mid": "0025NhlN2yWrP4",
+            "name": "周杰伦",
+            "fans": 50864691
+          },
+          "songlist": [
+            {
+              "mid": "0039MnYb0qxYhV",
+              "id": 97773,
+              "title": "晴天",
+              "singer": [
+                {
+                  "id": 4558,
+                  "mid": "0025NhlN2yWrP4",
+                  "name": "周杰伦",
+                  "title": "周杰伦",
+                  "type": 0,
+                  "uin": 0
+                }
+              ],
+              "album": {
+                "id": 8220,
+                "mid": "000MkMni19ClKG",
+                "name": "叶惠美",
+                "title": "叶惠美",
+                "subtitle": "",
+                "time_public": "2003-07-31",
+                "pmid": "000MkMni19ClKG_5"
+              },
+              "interval": 269,
+              "file": {
+                "media_mid": "003Qui1q2u1Zho",
+                "size_24aac": 0,
+                "size_48aac": 1642440,
+                "size_96aac": 3283546,
+                "size_192ogg": 0,
+                "size_192aac": 0,
+                "size_128mp3": 4317292,
+                "size_320mp3": 0,
+                "size_ape": 0,
+                "size_flac": 0,
+                "size_dts": 0,
+                "size_try": 960887,
+                "try_begin": 84346,
+                "try_end": 142843,
+                "url": "",
+                "size_hires": 0,
+                "hires_sample": 0,
+                "hires_bitdepth": 0,
+                "b_30s": 0,
+                "e_30s": 60000,
+                "size_96ogg": 2927865
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "kg": {
+    "search": {
+      "status": 1,
+      "error_code": 0,
+      "error_msg": "",
+      "data": {
+        "pagesize": 2,
+        "page": 1,
+        "from": 0,
+        "size": 2,
+        "total": 29,
+        "correctiontype": 0,
+        "correctionforce": 0,
+        "correctiontip": "",
+        "lists": [
+          {
+            "AuthorId": 3520,
+            "AuthorName": "周杰伦",
+            "Avatar": "http://singerimg.kugou.com/uploadpic/softhead/240/20260324/20260324203006202058.jpg"
+          },
+          {
+            "AuthorId": 9895911,
+            "AuthorName": "周杰伦音乐集",
+            "Avatar": ""
+          }
+        ]
+      }
+    },
+    "info": {
+      "status": 1,
+      "data": {
+        "singername": "周杰伦",
+        "imgurl": "http://singerimg.kugou.com/uploadpic/softhead/{size}/20260324/20260324203006202058.jpg"
+      }
+    },
+    "detail": {
+      "status": 1,
+      "data": {
+        "total": 1845,
+        "info": [
+          {
+            "audio_id": 20505418,
+            "hash": "B3A52A7A958BF0AED0EBFBA2E9A818B7",
+            "sqhash": "0A69169202DE95AAF24A9944CCF0730D",
+            "320hash": "1B56126A8A03924F1DD066259C095CBC",
+            "hash_high": "D667BC5EE93F201126697CB3BA745009",
+            "filesize": 4317292,
+            "sqfilesize": 31633244,
+            "320filesize": 10792943,
+            "filesize_high": 55397039,
+            "album_name": "叶惠美",
+            "album_id": "966846",
+            "album_audio_id": 32100650,
+            "duration": 269,
+            "filename": "周杰伦 - 晴天",
+            "trans_param": {
+              "union_cover": "http://imge.kugou.com/stdmusic/{size}/20230920/20230920142503632013.jpg"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "kw": {
+    "search": {
+      "TOTAL": "68",
+      "abslist": [
+        {
+          "ARTISTID": "336",
+          "ARTIST": "周杰伦",
+          "PICPATH": "240/s4s56/58/291211030.jpg"
+        },
+        {
+          "ARTISTID": "354",
+          "ARTIST": "五月天",
+          "PICPATH": "240/s4s1/32/167770198.jpg"
+        }
+      ]
+    },
+    "info": {
+      "id": "336",
+      "name": "周杰伦",
+      "pic": "120/s4s56/58/291211030.jpg"
+    },
+    "detail": {
+      "TOTAL": "26",
+      "abslist": [
+        {
+          "MUSICRID": "MUSIC_166031326",
+          "SONGNAME": "烟花易冷 (片段)",
+          "ARTIST": "周杰伦",
+          "DURATION": "24",
+          "N_MINFO": "level:h,bitrate:128,format:mp3,size:384.20Kb;level:s,bitrate:48,format:aac,size:144.75Kb;level:p,bitrate:192,format:ogg,size:491.69Kb;level:h,bitrate:100,format:ogg,size:273.80Kb",
+          "ALBUM": "",
+          "ALBUMID": "0"
+        }
+      ]
+    }
+  },
+  "mg": {
+    "search": {
+      "code": "000000",
+      "info": "成功",
+      "singerResultData": {
+        "totalCount": "4",
+        "correct": [],
+        "result": [
+          {
+            "id": "112",
+            "name": "周杰伦",
+            "highlightStr": [
+              "周杰伦"
+            ]
+          },
+          {
+            "id": "1002359216",
+            "name": "周杰伦战队",
+            "highlightStr": [
+              "周杰伦"
+            ]
+          },
+          {
+            "id": "1142864934",
+            "name": "周杰伦_JAY",
+            "highlightStr": [
+              "周杰伦"
+            ]
+          },
+          {
+            "id": "1143798780",
+            "name": "周杰伦是我粉丝",
+            "highlightStr": [
+              "周杰伦"
+            ]
+          }
+        ]
+      },
+      "bestShowResultToneData": {}
+    },
+    "detail": {
+      "code": "000000",
+      "songNum": "413",
+      "singer": {
+        "singer": "周杰伦",
+        "imgs": [
+          {
+            "imgSizeType": "01",
+            "img": "https://d.musicapp.migu.cn/data/oss/resource/00/5l/4k/73263a79db124bc5b554541813652daa.webp",
+            "imgOri": "",
+            "fileId": "69c28dfa5a19df7523eea121",
+            "webpImg": ""
+          },
+          {
+            "imgSizeType": "02",
+            "img": "https://d.musicapp.migu.cn/data/oss/resource/00/5l/4k/180c79991fbb4dfb8e664adc2befc0b4.webp",
+            "imgOri": "",
+            "fileId": "69c28dfa5a19df7523eea122",
+            "webpImg": ""
+          },
+          {
+            "imgSizeType": "03",
+            "img": "https://d.musicapp.migu.cn/data/oss/resource/00/5l/4k/e7632d663a6846e1b3d357b35052150f.webp",
+            "imgOri": "",
+            "fileId": "69c28dfa5a19df7523eea120",
+            "webpImg": ""
+          }
+        ]
+      },
+      "songlist": [
+        {
+          "songId": "1140505222",
+          "songName": "圣诞星（feat. 杨瑞代）",
+          "singer": "周杰伦",
+          "album": "圣诞星",
+          "albumId": "1140505221",
+          "copyrightId": "60054704965",
+          "contentId": "600929000000096577",
+          "albumImgs": [
+            {
+              "imgSizeType": "01",
+              "img": "https://d.musicapp.migu.cn/data/oss/resource/00/5u/7q/d0ebff37292f4a958bb5c193310859d0.webp",
+              "imgOri": "",
+              "webpImg": ""
+            },
+            {
+              "imgSizeType": "02",
+              "img": "https://d.musicapp.migu.cn/data/oss/resource/00/5u/7q/02c701729f0142b8b8938d8cf11eaf22.webp",
+              "imgOri": "",
+              "webpImg": ""
+            },
+            {
+              "imgSizeType": "03",
+              "img": "https://d.musicapp.migu.cn/data/oss/resource/00/5u/7q/959ba4e19cf64d488f1f623f95892bf2.webp",
+              "imgOri": "",
+              "webpImg": ""
+            }
+          ],
+          "newRateFormats": [
+            {
+              "resourceType": "2",
+              "formatType": "PQ",
+              "format": "020007",
+              "size": "2925089",
+              "fileType": "mp3",
+              "price": "400",
+              "showTag": [
+                "vip"
+              ]
+            },
+            {
+              "resourceType": "2",
+              "formatType": "HQ",
+              "format": "020010",
+              "size": "7312407",
+              "fileType": "mp3",
+              "price": "400",
+              "showTag": [
+                "vip"
+              ]
+            },
+            {
+              "resourceType": "E",
+              "formatType": "SQ",
+              "format": "011002",
+              "size": "19853411",
+              "price": "400",
+              "androidFileType": "flac",
+              "iosFileType": "m4a",
+              "iosSize": "20022015",
+              "androidSize": "19853411",
+              "iosFormat": "011003",
+              "androidFormat": "011002",
+              "iosAccuracyLevel": "16bit",
+              "androidAccuracyLevel": "16bit",
+              "showTag": [
+                "vip"
+              ]
+            },
+            {
+              "resourceType": "2",
+              "formatType": "ZQ",
+              "price": "400",
+              "androidFileType": "flac",
+              "iosFileType": "m4a",
+              "iosSize": "37564009",
+              "androidSize": "37059571",
+              "iosFormat": "011006",
+              "androidFormat": "011005",
+              "androidNewFormat": "011005",
+              "iosBit": 24,
+              "androidBit": 24,
+              "showTag": [
+                "vip"
+              ]
+            },
+            {
+              "resourceType": "2",
+              "formatType": "AV3A",
+              "format": "020041",
+              "size": "19008764",
+              "fileType": "m4a",
+              "price": "400",
+              "showTag": [
+                "vip"
+              ]
+            }
+          ],
+          "lrcUrl": "https://d.musicapp.migu.cn/data/oss/resource/00/2t/1l/38a861e9806641448f8cab425b1f2b18",
+          "length": "00:03:02"
+        }
+      ]
+    }
+  }
+}
