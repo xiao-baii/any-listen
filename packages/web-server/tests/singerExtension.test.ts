@@ -19,6 +19,27 @@ test('health checks only enabled installed extensions', async () => {
   await assert.rejects(check([{ id: 'third-party', enabled: true, loaded: false }]), /third-party/)
 })
 
+test('packaged singer source names use the host locale', async () => {
+  const root = process.env.ACCOUNT_TEST_ROOT!
+  const directory = await mkdtemp(path.join(tmpdir(), 'singer-i18n-'))
+  const manifest = JSON.parse(await readFile(path.join(root, 'extensions/singer-metadata/manifest.json'), 'utf8'))
+  const bundle = await readFile(path.join(root, 'extensions/singer-metadata/dist', `singer-metadata_v${manifest.version}.alix`))
+  try {
+    for (const [locale, expected] of Object.entries({
+      'zh-cn': ['酷狗音乐', '酷我音乐', '网易音乐', '企鹅音乐', '咪咕音乐'],
+      'en-us': ['KuGou', 'Kuwo', 'NetEase', 'Tencent', 'Migu music'],
+      'zh-tw': ['酷狗音樂', '酷我音樂', '網易音樂', '企鵝音樂', '咪咕音樂'],
+    })) {
+      const installer = createDraftExtensions({ entry: path.join(root, 'build/server/extension-service.worker.js'), directory: path.join(directory, locale), origins: [], mirrors: () => '', locale: () => locale, icon: () => '' })
+      try {
+        const extension = await installer.importPackage(bundle)
+        assert.deepEqual(manifest.contributes.resource.map(({ name }: { name: string }) =>
+          extension.i18nMessages[name.slice(1, -1)]), expected)
+      } finally { await installer.close() }
+    }
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
 test('real ALIX installs, updates, publishes, disables and uninstalls without the original extensions', { timeout: 120000 }, async () => {
   const root = process.env.ACCOUNT_TEST_ROOT!
   const directory = await mkdtemp(path.join(tmpdir(), 'singer-extension-'))
