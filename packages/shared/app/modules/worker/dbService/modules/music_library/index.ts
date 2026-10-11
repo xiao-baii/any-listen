@@ -59,6 +59,7 @@ import {
   queryDefaultList,
   // queryUserListInfo,
   queryMusicInfoByListId,
+  queryFirstMusicInfosByListId,
   queryMusicInfoByListIdAndMusicInfoId,
   queryMusicInfoByMusicInfoId,
   removeMusicInfoByListId,
@@ -391,6 +392,15 @@ export const updateUserListsPosition = (position: number, ids: string[]) => {
   overwriteUserList(targetInfo.parentId, targetList)
 }
 
+const fromDBMusicInfo = (info: MusicInfo): AnyListen.Music.MusicInfo => ({
+  id: info.id,
+  name: info.name,
+  singer: info.singer,
+  isLocal: info.is_local == 1,
+  interval: info.interval,
+  meta: JSON.parse(info.meta),
+})
+
 /**
  * 根据列表ID获取列表内歌曲
  * @param listId 列表ID
@@ -399,16 +409,7 @@ export const updateUserListsPosition = (position: number, ids: string[]) => {
 export const getListMusics = (listId: string): AnyListen.Music.MusicInfo[] => {
   let targetList: AnyListen.Music.MusicInfo[] | undefined = getState().musicLists.get(listId)
   if (targetList == null) {
-    targetList = queryMusicInfoByListId(listId).map((info) => {
-      return {
-        id: info.id,
-        name: info.name,
-        singer: info.singer,
-        isLocal: info.is_local == 1,
-        interval: info.interval,
-        meta: JSON.parse(info.meta),
-      }
-    })
+    targetList = queryMusicInfoByListId(listId).map(fromDBMusicInfo)
     getState().musicLists.set(listId, targetList)
   } else {
     getState().musicLists.delete(listId)
@@ -584,16 +585,26 @@ export const musicsUpdate = (musicInfos: AnyListen.IPCList.ListActionMusicUpdate
       } satisfies MusicInfo
     })
   )
+  const lists = new Map<string, Map<string, AnyListen.Music.MusicInfo>>()
   for (const { id, musicInfo } of musicInfos) {
-    const targetList = getState().musicLists.get(id)
-    if (targetList == null) continue
-    const targetMusic = targetList.find((item) => item.id == musicInfo.id)
-    if (!targetMusic) continue
-    targetMusic.name = musicInfo.name
-    targetMusic.singer = musicInfo.singer
-    targetMusic.isLocal = musicInfo.isLocal
-    targetMusic.interval = musicInfo.interval
-    targetMusic.meta = musicInfo.meta
+    if (!getState().musicLists.has(id)) continue
+    let songs = lists.get(id)
+    if (!songs) {
+      songs = new Map()
+      lists.set(id, songs)
+    }
+    songs.set(musicInfo.id, musicInfo)
+  }
+  for (const [id, songs] of lists) {
+    for (const targetMusic of getState().musicLists.get(id)!) {
+      const musicInfo = songs.get(targetMusic.id)
+      if (!musicInfo) continue
+      targetMusic.name = musicInfo.name
+      targetMusic.singer = musicInfo.singer
+      targetMusic.isLocal = musicInfo.isLocal
+      targetMusic.interval = musicInfo.interval
+      targetMusic.meta = musicInfo.meta
+    }
   }
 }
 export const musicsUpdateLastPlayedList = (musicInfos: AnyListen.IPCList.ListActionMusicUpdate) => {
@@ -624,11 +635,7 @@ export const musicsUpdateLastPlayedList = (musicInfos: AnyListen.IPCList.ListAct
  * @param picUrl 图片Url
  */
 export const musicPicUpdate = (listId: string, musicId: string, picUrl: string) => {
-  let targetList = getState().musicLists.get(listId)
-  if (!targetList) {
-    targetList = getListMusics(listId)
-    getState().musicLists.set(listId, targetList)
-  }
+  const targetList = getState().musicLists.get(listId) ?? getListMusics(listId)
   const musicInfo = targetList.find((item) => item.id == musicId)
   if (!musicInfo) return
   musicInfo.meta.picUrl = picUrl
@@ -641,11 +648,7 @@ export const musicPicUpdate = (listId: string, musicId: string, picUrl: string) 
  * @param musicInfos 歌曲&列表信息
  */
 export const musicBaseInfosUpdate = (listId: string, musicInfos: AnyListen.Music.MusicInfo[]) => {
-  let targetList = getState().musicLists.get(listId)
-  if (!targetList) {
-    targetList = getListMusics(listId)
-    getState().musicLists.set(listId, targetList)
-  }
+  const targetList = getState().musicLists.get(listId) ?? getListMusics(listId)
   const infosMap = new Map<string, AnyListen.Music.MusicInfo>()
   for (const item of musicInfos) infosMap.set(item.id, item)
   let updatedInfos: AnyListen.Music.MusicInfo[] = []
@@ -790,8 +793,8 @@ export const getListInfos = (ids: string[]): Array<AnyListen.List.MyListInfo | u
 
 export const getListsFirstMusics = (ids: string[]) => {
   return ids.map((id) => {
-    const list = getListMusics(id)
-    return list.slice(0, 4)
+    const list = getState().musicLists.get(id)
+    return list ? list.slice(0, 4) : queryFirstMusicInfosByListId(id).map(fromDBMusicInfo)
   })
 }
 

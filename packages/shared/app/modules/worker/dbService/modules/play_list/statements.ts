@@ -16,8 +16,7 @@ export interface ListMusicInfo {
 }
 
 export interface MusicInfo {
-  id: string
-  list_id: string
+  item_id: string
   name: string
   singer: string
   interval: string | null
@@ -86,7 +85,7 @@ export const createUpdateStatement = () => {
   return dbPrepare<MusicInfo>(`
     UPDATE "main"."play_list_music_info"
     SET "name"=@name, "singer"=@singer, "is_local"=@is_local, "interval"=@interval, "meta"=@meta
-    WHERE "id"=@id AND "list_id"=@list_id`)
+    WHERE "item_id"=@item_id`)
 }
 
 /**

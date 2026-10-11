@@ -202,6 +202,10 @@ export const queryMusicInfoByListId = (listId: string) => {
   return musicInfoQueryStatement.all({ list_id: listId })
 }
 
+export const queryFirstMusicInfosByListId = (listId: string) => {
+  return createMusicInfoQueryStatement(true).all({ list_id: listId })
+}
+
 export const queryListMusicInfo = (listId: string, musicId: string) => {
   const musicInfoQueryStatement = createListMusicInfoQueryStatement()
   return musicInfoQueryStatement.get({ list_id: listId, music_id: musicId })

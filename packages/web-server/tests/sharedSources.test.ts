@@ -1,10 +1,77 @@
 import assert from 'node:assert/strict'
+import { once } from 'node:events'
 import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 
 import { SharedExtensions } from '../src/accounts/sharedExtensions'
+
+test('source cache expires idle files, renews reads and drains cleanup on stop', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'any-listen-source-cache-'))
+  const host = new SharedExtensions('unused-worker', root)
+  const cache = host as unknown as {
+    writeCache: (name: string, data: Uint8Array) => Promise<string>
+    result: (token: string) => { assets: Record<string, { file: string }> }
+    cleanCache: () => Promise<void>
+    cacheTimer: ReturnType<typeof setInterval> | undefined
+    cleaningCache: Promise<void> | undefined
+  }
+  const idle = 48 * 60 * 60_000
+  const start = Date.now()
+  t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: start })
+  const write = async () => {
+    const token = await cache.writeCache('song.mp3', Buffer.from('fixture audio'))
+    return cache.result(token).assets[token].file
+  }
+  const consume = async (file: string) => {
+    const stream = host.openFile(file)!
+    let data = ''
+    for await (const chunk of stream) data += chunk
+    return data
+  }
+  try {
+    await mkdir(path.join(root, 'source-cache'))
+    const expired = await write()
+    const renewed = await write()
+    const active = await write()
+    const missing = await write()
+    const icon = path.join(root, 'icon.png')
+    await writeFile(icon, 'icon')
+    await rm(missing)
+    assert.ok(cache.cacheTimer)
+    t.mock.timers.setTime(start + idle - 1)
+    assert.equal(await consume(renewed), 'fixture audio')
+    const stream = host.openFile(active)!
+    await once(stream, 'open')
+    t.mock.timers.setTime(start + idle)
+    assert.equal(host.openFile(expired), undefined)
+    const firstCleanup = cache.cleanCache()
+    await Promise.all([firstCleanup, cache.cleanCache()])
+    await assert.rejects(readFile(expired), { code: 'ENOENT' })
+    assert.equal((await readFile(active)).toString(), 'fixture audio')
+    assert.equal(await consume(renewed), 'fixture audio')
+    assert.equal(await consume(icon), 'icon')
+    const closed = once(stream, 'close')
+    stream.destroy()
+    await closed
+    t.mock.timers.tick(idle + 10 * 60_000)
+    await cache.cleanCache()
+    await assert.rejects(readFile(renewed), { code: 'ENOENT' })
+    await assert.rejects(readFile(active), { code: 'ENOENT' })
+    assert.equal(await consume(icon), 'icon')
+    const last = await write()
+    t.mock.timers.tick(idle + 10 * 60_000)
+    await host.stop()
+    await assert.rejects(readFile(last), { code: 'ENOENT' })
+    assert.equal(cache.cacheTimer, undefined)
+    assert.equal(cache.cleaningCache, undefined)
+  } finally {
+    await host.close()
+    t.mock.timers.reset()
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test(
   'one public host serializes calls, isolates cancellation, rejects personal access and replaces versions',

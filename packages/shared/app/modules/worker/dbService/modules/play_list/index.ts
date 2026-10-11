@@ -19,7 +19,7 @@ import {
   updatePlayedInfo,
   updatePositionInfo,
 } from './dbHelper'
-import type { ListMusicInfo, PlayedInfo } from './statements'
+import type { ListMusicInfo, MusicInfo, PlayedInfo } from './statements'
 
 const sourceMap: Record<number, AnyListen.Player.SourceType> = {
   0: 'local',
@@ -140,7 +140,8 @@ export const playListAdd = (position: number, list: AnyListen.Player.PlayMusicIn
 export const playListRemove = (ids: string[]) => {
   initListInfo()
   deleteInfo(ids)
-  getState().playList = getState().playList!.filter((l) => !ids.includes(l.itemId))
+  const idSet = new Set(ids)
+  getState().playList = getState().playList!.filter((l) => !idSet.has(l.itemId))
   for (const id of ids) getState().rawPoss.delete(id)
 }
 
@@ -152,14 +153,19 @@ export const playListUpdate = (info: AnyListen.Player.PlayMusicInfo[]) => {
   initListInfo()
   const musicMap = new Map<string, AnyListen.Player.PlayMusicInfo>()
   for (const music of info) musicMap.set(music.itemId, music)
-  const updateInfos: AnyListen.Player.PlayMusicInfo[] = []
-  const infos = getState().playList!.filter((i) => {
-    const update = musicMap.has(i.itemId)
-    if (update) updateInfos.push(i)
-    return update
-  })
+  const infos = getState().playList!.filter((i) => musicMap.has(i.itemId))
   if (!infos.length) return
-  const dbList: ListMusicInfo[] = toDBList(updateInfos, 0)
+  const dbList = infos.map(({ itemId }) => {
+    const { musicInfo } = musicMap.get(itemId)!
+    return {
+      item_id: itemId,
+      name: musicInfo.name,
+      singer: musicInfo.singer,
+      is_local: Number(musicInfo.isLocal),
+      interval: musicInfo.interval,
+      meta: JSON.stringify(musicInfo.meta),
+    } satisfies MusicInfo
+  })
   updateInfo(dbList)
   for (const oInfo of infos) {
     const info = musicMap.get(oInfo.itemId)!

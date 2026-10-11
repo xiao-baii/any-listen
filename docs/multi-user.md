@@ -9,18 +9,15 @@
 
 ## 部署
 
-要求 Docker Compose、HTTPS 反向代理和持久化目录。宿主机直接运行要求 Node.js 24、pnpm 10.34.5。
-所有以下命令在仓库根目录执行。生产数据不要使用测试预览目录。
+当前多用户发布版本为 `multi-user-v0.1.7`：改用 GHCR 与 1Panel 拉取更新，修复播放队列歌曲更新的持久化，减少歌单封面查询和批量操作开销，并清理闲置公共音源缓存。部署继续跟随 `multi-user` 滚动镜像标签。
 
-```sh
-docker compose -f compose.multi-user.yml build
-```
+要求 Docker Compose、HTTPS 反向代理和持久化目录。宿主机直接运行要求 Node.js 24、pnpm 10.34.5。
+以下命令在包含 `compose.image.yml` 的部署目录执行。生产数据不要使用测试预览目录。GHCR 包需由维护者设为公开；编排默认通过南京大学 GHCR 镜像服务拉取，服务器需能访问 `ghcr.nju.edu.cn`。
 
 首次启动会在空账号数据库中自动创建管理员。设置 `.env`：
 
 ```dotenv
 PUBLIC_ORIGIN=https://music.example.com
-ANYLISTEN_TAG=multi-user-local
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD='这里换成你自己的初始密码'
 ```
@@ -28,12 +25,13 @@ ADMIN_PASSWORD='这里换成你自己的初始密码'
 用户名为 3 至 32 位英文字母、数字、点、下划线或连字符，首位须为字母或数字；密码为 1 至 128 个字符。`.env` 密码用单引号包围，避免 `$` 和 `#` 被解析，含单引号的密码可改用密码文件。Compose 将编排文件旁的 `./data` 挂载到 `/server/data`，不创建命名卷。编排通过 `user: '0:0'` 以容器内 root 用户运行服务，普通 Linux 本地目录挂载无需手动修改归属。若移除 `user:`，则使用镜像默认的 UID/GID 1000，须确保挂载目录允许该用户写入。
 
 ```sh
-docker compose -f compose.multi-user.yml up -d
+docker compose -f compose.image.yml pull
+docker compose -f compose.image.yml up -d
 ```
 
 空数据库缺少有效初始化配置时启动失败，修正后重新部署。已有账号时跳过初始化，更改或移除环境变量不会覆盖密码。首次登录可直接进入播放器，无需强制改密；管理员重置密码后也可直接登录，旧会话仍会失效。初始化后删除 `.env` 中的 `ADMIN_PASSWORD` 并重建容器，账号密码保持不变。初始密码不打印到日志，但 Docker 管理员可查看容器环境变量。
 
-1Panel 导入镜像的完整流程见 [镜像文件部署](image-import.md)。
+1Panel 拉取、首次切换和重建更新的完整流程见 [GHCR 镜像部署](ghcr-deployment.md)。源码开发可使用 `compose.multi-user.yml` 本地构建，它使用独立的本地镜像名，不覆盖正式镜像。
 
 ### 可选：密码文件或手动初始化
 
@@ -42,7 +40,7 @@ docker compose -f compose.multi-user.yml up -d
 需要手动创建管理员时，可在服务停止且账号数据库为空的状态下初始化。将初始密码放在仅管理员可读且容器用户可读取的本地文件 `admin-password.txt`，然后执行：
 
 ```sh
-docker compose -f compose.multi-user.yml run --rm --no-deps \
+docker compose -f compose.image.yml run --rm --no-deps \
   -v "$PWD/admin-password.txt:/run/admin-password:ro" \
   -e ADMIN_PASSWORD_FILE=/run/admin-password \
   any-listen create-admin admin
@@ -144,9 +142,11 @@ location / {
 
 代码导航、测试命令、验证结果及同步 main 的注意事项统一见 [开发指南](single-process-development.md)。本机预览命令和测试账号也见该文档，不用于生产。
 
-`main` 用于同步上游，功能改动在 `multi-user` 分支维护。推送该分支会触发 Multi User 检查；检查通过不自动生成镜像。当前发布标签为 `multi-user-v0.1.1`。自定义工作流在 `xiao-baii/any-listen` 的 `multi-user-v*` 标签或手动运行 `multi-user` 分支通过检查后，导出 Linux AMD64 Docker TAR 至 Actions Artifacts，保留 30 天，不推送 GHCR。镜像标签为 `any-listen:<标签或分支>` 和 `any-listen:sha-<完整提交>`。
+`main` 用于同步上游，功能改动在 `multi-user` 分支维护。推送分支和预发布标签只执行 Multi User 检查；手动运行额外验证 Docker 构建，不发布镜像。仅 `xiao-baii/any-listen` 的正式 `multi-user-vX.Y.Z` 标签检查通过后发布 Linux AMD64 镜像到 `ghcr.io/xiao-baii/any-listen`，包含固定版本标签和 `sha-<完整提交>` 标签。固定标签不覆盖，同一版本、提交的完整发布重跑复用原镜像；部分发布或标签冲突会失败，需维护者检查。
 
-上游 release 工作流限于原仓库执行。1Panel 文件导入使用 `compose.image.yml`，详见 [镜像导入说明](image-import.md)；本文的 `compose.multi-user.yml` 用于源码本地构建。
+镜像发布串行执行，验证摘要、架构、版本和提交信息后，只有高于现有版本的正式版本才推进滚动标签 `multi-user`。补发旧版本不会降低滚动版本。不要在同一提交上创建多个正式版本标签，也不要在工作流外修改发布标签。Actions 的并发组可能取消多次排队中的较早任务，被取消的正式版本可重新运行。首次发布后维护者将包设为 Public 并验证匿名拉取；服务器无需 GitHub 发布令牌。
+
+上游 release 工作流限于原仓库执行。1Panel 使用现有 `compose.image.yml` 的滚动标签拉取并重建，详见 [GHCR 部署说明](ghcr-deployment.md)。
 
 ## 发布前外部验收
 

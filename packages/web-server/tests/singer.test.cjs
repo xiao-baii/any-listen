@@ -45,6 +45,25 @@ const music = (id, singer = '甲') => ({
   meta: { source: 'fixture', musicId: id, qualitys: {} },
 })
 
+test('batch queue removal keeps remaining order and emits the existing events', async () => {
+  const api = await load(`
+    export { removePlayListMusic } from './packages/view-main/src/modules/player/store/commit'
+    export { playerState } from './packages/view-main/src/modules/player/store/state'
+    export { playerEvent } from './packages/view-main/src/modules/player/store/event'
+  `)
+  api.playerState.playList = ['a', 'b', 'c', 'd'].map(itemId => ({ itemId, musicInfo: music(itemId) }))
+  const events = []
+  for (const event of ['playListMusicRemoved', 'playListMusicChanged', 'playListChanged'])
+    api.playerEvent.on(event, value => events.push([event, value]))
+  const ids = ['b', 'missing', 'b', 'd']
+  api.removePlayListMusic(ids)
+  await Promise.resolve()
+  assert.deepEqual(api.playerState.playList.map(item => item.itemId), ['a', 'c'])
+  assert.deepEqual(events.map(([event]) => event), ['playListMusicRemoved', 'playListMusicChanged', 'playListChanged'])
+  assert.deepEqual(events[0][1], ids)
+  assert.deepEqual(events[1][1].map(item => item.itemId), ['a', 'c'])
+})
+
 test('ordinary users may search singers and read works without gaining extension management access', async () => {
   const { protectRpc } = await load(`export { protectRpc } from './packages/web-server/src/accounts/managed'`)
   const rpc = protectRpc({ singerSearch: async () => 'search', singer: async () => 'works' }, {

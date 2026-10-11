@@ -12,6 +12,132 @@ import { createAccountDatabase } from '../../shared/app/modules/worker/dbService
 import { LIST_IDS } from '../../shared/common/constants'
 import { SharedDatabase } from '../src/accounts/sharedDatabase'
 
+const openTestDatabase = async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'any-listen-list-regression-'))
+  const require = createRequire(path.join(process.env.ACCOUNT_TEST_ROOT!, 'packages/shared/app/package.json'))
+  const binding = require(path.join(path.dirname(require.resolve('better-sqlite3')), 'binding.js')).getPrebuildPath()
+  const open = () => createAccountDatabase(root, binding, 'regression')
+  const db = await open()
+  const context = [...getManagedDatabaseContexts()].at(-1)!
+  return { root, open, db, context }
+}
+
+const song = (id: string, name = id) =>
+  ({ id, name, singer: 'artist', isLocal: false, interval: null, meta: {} }) as AnyListen.Music.MusicInfo
+
+test('queue updates persist only selected item ids and do not change memory when SQL fails', async () => {
+  const fixture = await openTestDatabase()
+  let db = fixture.db
+  const item = (itemId: string): AnyListen.Player.PlayMusicInfo => ({
+    itemId, listId: LIST_IDS.DEFAULT, source: 'singer', played: true, playLater: true, musicInfo: song('same-song'),
+  })
+  const original = [item('a'), item('b'), item('c')]
+  try {
+    db.service.playListOverride(original)
+    const update = { ...item('b'), listId: 'ignored-list', source: 'search' as const, played: false,
+      musicInfo: { ...song('same-song', 'after'), singer: 'new artist', interval: '1:23', meta: { picUrl: 'new.jpg' } } }
+    db.service.playListUpdate([{ ...update, musicInfo: song('same-song', 'first') }, item('missing'), update])
+    const expected = structuredClone(original)
+    expected[1].musicInfo = update.musicInfo
+    assert.deepEqual(db.service.getPlayList(), expected)
+    db.close()
+    db = await fixture.open()
+    assert.deepEqual(db.service.getPlayList(), expected)
+    const context = [...getManagedDatabaseContexts()].at(-1)!
+    context.db!.exec(`CREATE TEMP TRIGGER fail_update BEFORE UPDATE ON play_list_music_info BEGIN SELECT RAISE(ABORT, 'fixture failure'); END`)
+    assert.throws(() => db.service.playListUpdate([{ ...item('a'), musicInfo: song('same-song', 'must not appear') }]), /fixture failure/)
+    assert.deepEqual(db.service.getPlayList(), expected)
+    context.db!.exec('DROP TRIGGER fail_update')
+    db.service.playListRemove(['b', 'missing', 'b'])
+    assert.deepEqual(db.service.getPlayList().map(item => item.itemId), ['a', 'c'])
+    db.close()
+    db = await fixture.open()
+    assert.deepEqual(db.service.getPlayList().map(item => item.itemId), ['a', 'c'])
+  } finally {
+    db.close()
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
+test('cover reads remain partial and batch updates keep cached identities and input order', async () => {
+  const { db, root, context } = await openTestDatabase()
+  const cache = () => (context.states.get('music_library/index.ts') as { musicLists: Map<string, AnyListen.Music.MusicInfo[]> }).musicLists
+  try {
+    assert.deepEqual(db.service.getListsFirstMusics([LIST_IDS.DEFAULT]), [[]])
+    assert.equal(cache().size, 0)
+    db.service.musicOverwrite(LIST_IDS.DEFAULT, [song('a'), song('b')])
+    const cached = db.service.getListMusics(LIST_IDS.DEFAULT)
+    assert.equal(db.service.getListsFirstMusics([LIST_IDS.DEFAULT])[0][0], cached[0])
+    cache().clear()
+    assert.deepEqual(db.service.getListsFirstMusics([LIST_IDS.DEFAULT])[0], cached)
+    assert.equal(cache().size, 0)
+    const large = Array.from({ length: 2001 }, (_, i) => song(String(i)))
+    db.service.musicOverwrite(LIST_IDS.DEFAULT, large)
+    db.service.musicsPositionUpdate(LIST_IDS.DEFAULT, 0, ['2000', '1999'])
+    assert.deepEqual(db.service.getListsFirstMusics([LIST_IDS.DEFAULT])[0].map(song => song.id), ['2000', '1999', '0', '1'])
+    assert.equal(cache().size, 0)
+    context.db!.prepare('UPDATE my_list_music_info SET meta = ? WHERE list_id = ? AND id = ?').run('invalid JSON', LIST_IDS.DEFAULT, '2')
+    assert.equal(db.service.getListsFirstMusics([LIST_IDS.DEFAULT])[0].length, 4, 'must not parse the fifth row')
+
+    db.service.musicOverwrite(LIST_IDS.LOVE, [song('same'), song('untouched')])
+    db.service.musicOverwrite(LIST_IDS.LAST_PLAYED, [song('same')])
+    const love = db.service.getListMusics(LIST_IDS.LOVE)
+    const reference = love[0]
+    cache().delete(LIST_IDS.LAST_PLAYED)
+    db.service.musicsUpdate([
+      { id: LIST_IDS.LOVE, musicInfo: song('same', 'first') },
+      { id: LIST_IDS.LAST_PLAYED, musicInfo: song('same', 'other list') },
+      { id: LIST_IDS.LOVE, musicInfo: song('missing') },
+      { id: LIST_IDS.LOVE, musicInfo: song('same', 'last') },
+    ])
+    assert.equal(love[0], reference)
+    assert.equal(reference.name, 'last')
+    assert.equal(love[1].name, 'untouched')
+    assert.equal(cache().has(LIST_IDS.LAST_PLAYED), false)
+    cache().clear()
+    assert.equal(db.service.getListMusics(LIST_IDS.LOVE)[0].name, 'last')
+    assert.equal(db.service.getListMusics(LIST_IDS.LAST_PLAYED)[0].name, 'other list')
+  } finally {
+    db.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('cover and base-info updates populate cold caches and reuse hot caches', async () => {
+  const { db, root, context } = await openTestDatabase()
+  try {
+    for (const cold of [true, false]) {
+      db.service.musicOverwrite(LIST_IDS.DEFAULT, [song('a'), song('b')])
+      const cache = (context.states.get('music_library/index.ts') as { musicLists: Map<string, AnyListen.Music.MusicInfo[]> }).musicLists
+      if (cold) cache.clear()
+      const previous = cache.get(LIST_IDS.DEFAULT)
+      const updated = db.service.musicPicUpdate(LIST_IDS.DEFAULT, 'a', 'cover.jpg')!
+      const cached = cache.get(LIST_IDS.DEFAULT)!
+      assert.equal(updated, cached[0])
+      if (previous) assert.equal(cached, previous)
+      cache.clear()
+      assert.equal(db.service.getListMusics(LIST_IDS.DEFAULT)[0].meta.picUrl, 'cover.jpg')
+
+      if (cold) cache.clear()
+      const beforeBase = cache.get(LIST_IDS.DEFAULT)
+      const result = db.service.musicBaseInfosUpdate(LIST_IDS.DEFAULT, [song('a', 'renamed'), song('missing')])
+      const afterBase = cache.get(LIST_IDS.DEFAULT)!
+      assert.equal(result.length, 1)
+      assert.equal(afterBase[0].name, 'renamed')
+      assert.equal(afterBase[0].meta.picUrl, 'cover.jpg')
+      if (beforeBase) assert.equal(afterBase, beforeBase)
+      cache.clear()
+      const persisted = db.service.getListMusics(LIST_IDS.DEFAULT)
+      assert.equal(persisted[0].name, 'renamed')
+      assert.equal(persisted[0].meta.picUrl, 'cover.jpg')
+      assert.equal(persisted[1].name, 'b')
+    }
+  } finally {
+    db.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('database contexts retain their own state across interleaved asynchronous work', async () => {
   const a = new DatabaseContext(true)
   const b = new DatabaseContext(true)

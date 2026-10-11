@@ -189,7 +189,7 @@ export const createListUpdateStatement = () => {
  * 创建音乐信息查询语句
  * @returns 查询语句
  */
-export const createMusicInfoQueryStatement = () => {
+export const createMusicInfoQueryStatement = (firstFour = false) => {
   return dbPrepare<MusicInfoQuery, MusicInfo>(`
     SELECT mInfo."id", mInfo."list_id", mInfo."name", mInfo."singer", mInfo."is_local", mInfo."interval", mInfo."meta", O."order"
     FROM my_list_music_info mInfo
@@ -197,6 +197,7 @@ export const createMusicInfoQueryStatement = () => {
     ON mInfo.id=O.music_id AND O.list_id=@list_id
     WHERE mInfo.list_id=@list_id
     ORDER BY O."order" ASC
+    ${firstFour ? 'LIMIT 4' : ''}
     `)
 }
 

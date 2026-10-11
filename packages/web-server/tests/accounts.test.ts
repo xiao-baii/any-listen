@@ -603,6 +603,26 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     for (let attempt = 0; attempt < 50 && !adminEvents.some(event => event.action === 'logOutput'); attempt++) await delay(20)
     assert(adminEvents.some(event => event.action === 'logOutput'))
     assert(!aEvents.some((event: any) => event.action === 'logOutput'), 'Source logs are not broadcast to ordinary accounts')
+    const sourceCache = runtimes.sources as unknown as {
+      writeCache: (name: string, data: Uint8Array) => Promise<string>
+      result: (token: string) => { assets: Record<string, { file: string }> }
+      cachedFiles: Map<string, { lastAccess: number }>
+    }
+    await mkdir(path.join(runtimes.temporaryRoot, 'source-cache'), { recursive: true })
+    const cacheToken = await sourceCache.writeCache('fixture.mp3', Buffer.from('cached audio'))
+    const assets = sourceCache.result(cacheToken).assets
+    await (await runtimes.get(admin.user)).context.sourceEvent({
+      value: { ...logEvent.value, data: { ...logEvent.value.data, id: 'cache-fixture', message: cacheToken } }, assets,
+    })
+    for (let attempt = 0; attempt < 50 && !adminEvents.some(event => event.data?.id === 'cache-fixture'); attempt++) await delay(20)
+    const cacheUrl = adminEvents.find(event => event.data?.id === 'cache-fixture').data.message as string
+    const cachePath = `/u/${admin.user.id}${cacheUrl.slice(cacheUrl.indexOf('/public/medias/'))}`
+    assert.equal((await api(cachePath, alice.cookie)).status, 403)
+    const cachedAudio = await api(cachePath, admin.cookie)
+    assert.equal(cachedAudio.status, 200)
+    assert.equal(await cachedAudio.text(), 'cached audio')
+    sourceCache.cachedFiles.get(assets[cacheToken].file)!.lastAccess -= 48 * 60 * 60_000
+    assert.equal((await api(cachePath, admin.cookie)).status, 404, 'idle cache addresses expire before the sweep deletes the file')
     assert.equal(runtimes.status().topology, 'single-process-shared-workers')
     assert.equal(new Set(runtimes.status().active.map(runtime => runtime.process)).size, 1)
     assert.equal((await api('/account-api/source-script', alice.cookie, 'POST', {})).status, 403)

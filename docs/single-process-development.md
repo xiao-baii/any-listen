@@ -7,7 +7,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [部署与维护](multi-user.md) | 新部署、账号管理、音源发布、升级和恢复 |
-| [镜像文件部署](image-import.md) | GitHub Actions 产物与 1Panel 导入 |
+| [GHCR 镜像部署](ghcr-deployment.md) | GitHub Actions 发布与 1Panel 拉取更新 |
 | [改造方案](single-process-multi-user-plan.md) | 设计约束及阶段 0–6 的状态 |
 | [ADR 0001](adr/0001-shared-online-runtime.md) | 共享进程、公共音源、串行发布的取舍 |
 | [领域术语](../CONTEXT.md) | 账号、会话、草稿和公共音源的定义 |
@@ -119,7 +119,7 @@ git diff --check
 
 本次账号入口、共享服务、前端和测试相互依赖，建议作为一个完整功能提交，附带上述文档及 CI 检查。建议提交标题：`feat: share online multi-user runtime in one process`。后续修复按独立问题提交。
 
-上传范围包含 `.github/workflows/multi-user.yml`、相关 `packages/` 源码和测试、README、领域术语及 `docs/` 文档。`work/` 基线副本、预览数据、扩展包、日志、`build/`、测试生成文件、`.env` 和 SQLite 数据均不上传。镜像 TAR 由 CI 构建后作为 Artifact 下载，不提交到 Git。
+上传范围包含 `.github/workflows/multi-user.yml`、相关 `packages/` 源码和测试、README、领域术语及 `docs/` 文档。`work/` 基线副本、预览数据、扩展包、日志、`build/`、测试生成文件、`.env` 和 SQLite 数据均不上传。正式镜像由 CI 构建并推送 GHCR。
 
 同步上游时先提交当前改动并保持工作区干净，确认 `main` 用于跟随上游，再执行：
 
@@ -135,4 +135,4 @@ git merge main
 
 冲突主要集中在共享模块的默认入口与实例入口、Worker API、扩展配置及 RPC 允许列表。合并时逐项检查新模块有无账号可变单例、广播是否绑定账号、在线入口是否重新启动本地/WebDAV 任务，再执行上述测试和 Web/桌面构建。不要用整文件覆盖来解决这些冲突。
 
-推送 `multi-user` 触发检查；创建 `multi-user-v*` 标签或手动执行指定分支的工作流才会生成镜像文件。当前版本使用 `multi-user-v0.1.1`。上线前完成[外部验收](multi-user.md#发布前外部验收)，升级和回退使用配套镜像与账号卷备份。
+推送 `multi-user` 或预发布标签只触发检查；正式 `multi-user-vX.Y.Z` 标签检查通过后发布 GHCR 固定版本和提交标签，仅更高正式版本推进 `multi-user` 滚动标签。手动执行工作流只检查和验证镜像构建。发布规则测试使用 `node --test scripts/ghcr-release.test.cjs`，已接入 CI。上线前完成[外部验收](multi-user.md#发布前外部验收)，升级和回退使用配套镜像与账号卷备份。

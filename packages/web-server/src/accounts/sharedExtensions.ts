@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { mkdir, readFile, writeFile, rm, realpath, cp } from 'node:fs/promises'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -20,6 +21,8 @@ type SourceService = Pick<ExtensionSeriveTypes,
 export type SharedAsset = { url: string; options?: AnyListen.IPCExtension.RequestOptions; cache?: boolean } | { file: string }
 export type SharedResult = { value: unknown; assets: Record<string, SharedAsset> }
 const assetPrefix = 'al-ps-host:/shared/'
+const cacheIdleMs = 48 * 60 * 60_000
+const cacheSweepMs = 10 * 60_000
 
 export class SharedExtensions {
   private host: { worker: Worker; service: SourceService; close: () => Promise<void> } | undefined
@@ -35,6 +38,10 @@ export class SharedExtensions {
   private stopping: Promise<void> | undefined
   private failure: string | undefined
   private closed = false
+  private cachedFiles = new Map<string, { lastAccess: number; readers: number; deleting: boolean }>()
+  private cacheWrites = new Set<Promise<void>>()
+  private cacheTimer: ReturnType<typeof setInterval> | undefined
+  private cleaningCache: Promise<void> | undefined
   onEvent: (event: SharedResult) => void = () => {}
   onFailure: () => void = () => {}
 
@@ -46,6 +53,58 @@ export class SharedExtensions {
 
   status() {
     return { workers: this.host ? 1 : 0, version: this.version ?? null, queued: this.queued, error: this.failure ?? null }
+  }
+
+  private async writeCache(name: string, data: Uint8Array) {
+    if (!(data instanceof Uint8Array) || data.byteLength > 8 * 1024 * 1024) throw new Error('Source cache entry too large')
+    const ext = path.extname(name.split('?')[0]).toLowerCase()
+    if (!['.mp3', '.flac', '.ogg', '.oga', '.wav', '.m4a', '.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext))
+      throw new Error('Unsupported source cache type')
+    const file = path.join(this.root, 'source-cache', randomUUID() + ext)
+    const write = writeFile(file, data)
+    this.cacheWrites.add(write)
+    try {
+      await write
+      this.cachedFiles.set(file, { lastAccess: Date.now(), readers: 0, deleting: false })
+      if (!this.cacheTimer && !this.stopping && !this.closed)
+        this.cacheTimer = setInterval(() => { void this.cleanCache() }, cacheSweepMs).unref()
+      return this.asset({ file })
+    } finally {
+      this.cacheWrites.delete(write)
+    }
+  }
+
+  openFile(file: string) {
+    if (path.dirname(file) !== path.join(this.root, 'source-cache')) return createReadStream(file)
+    const entry = this.cachedFiles.get(file)
+    if (!entry || entry.deleting || (!entry.readers && Date.now() - entry.lastAccess >= cacheIdleMs)) return
+    entry.lastAccess = Date.now()
+    entry.readers++
+    const stream = createReadStream(file)
+    stream.once('close', () => {
+      entry.readers--
+      entry.lastAccess = Date.now()
+    })
+    return stream
+  }
+
+  private cleanCache() {
+    if (this.cleaningCache) return this.cleaningCache
+    const action = (async () => {
+      for (const [file, entry] of this.cachedFiles) {
+        if (entry.readers || Date.now() - entry.lastAccess < cacheIdleMs) continue
+        entry.deleting = true
+        try {
+          await rm(file, { force: true })
+          this.cachedFiles.delete(file)
+        } catch (error) {
+          entry.deleting = false
+          logs.ExtensionService.logcat.error('[Source cache] Could not remove expired file', error)
+        }
+      }
+    })()
+    this.cleaningCache = action
+    return action.finally(() => { this.cleaningCache = undefined })
   }
 
   private asset(value: SharedAsset) {
@@ -157,15 +216,7 @@ export class SharedExtensions {
         createProxyUrl: (url: string, options?: AnyListen.IPCExtension.RequestOptions, cache?: boolean) =>
           this.asset({ url, options, cache }),
         checkProxyCache: () => false,
-        writeProxyCache: async (name: string, data: Uint8Array) => {
-          if (!(data instanceof Uint8Array) || data.byteLength > 8 * 1024 * 1024) throw new Error('Source cache entry too large')
-          const ext = path.extname(name.split('?')[0]).toLowerCase()
-          if (!['.mp3', '.flac', '.ogg', '.oga', '.wav', '.m4a', '.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext))
-            throw new Error('Unsupported source cache type')
-          const file = path.join(cache, randomUUID() + ext)
-          await writeFile(file, data)
-          return this.asset({ file })
-        },
+        writeProxyCache: (name: string, data: Uint8Array) => this.writeCache(name, data),
         createExtensionIconPublicPath: async (_dir: string, file: string) => {
           const base = await realpath(path.join(directory, 'ext'))
           const resolved = await realpath(file)
@@ -351,6 +402,8 @@ export class SharedExtensions {
 
   async stop() {
     if (this.stopping) return this.stopping
+    clearInterval(this.cacheTimer)
+    this.cacheTimer = undefined
     this.generation++
     const host = this.host
     this.host = undefined
@@ -358,6 +411,9 @@ export class SharedExtensions {
     const action = (async () => {
       if (host) await host.close()
       await this.pending
+      await Promise.allSettled(this.cacheWrites)
+      await this.cleaningCache
+      this.cachedFiles.clear()
       this.assets.clear()
       this.icons.clear()
     })()

@@ -186,7 +186,8 @@ export const addPlayListMusic = (position: number, list: AnyListen.Player.PlayMu
 }
 
 export const removePlayListMusic = (ids: string[]) => {
-  playerState.playList = playerState.playList.filter((l) => !ids.includes(l.itemId))
+  const idSet = new Set(ids)
+  playerState.playList = playerState.playList.filter((l) => !idSet.has(l.itemId))
 
   const l = [...playerState.playList]
   playerEvent.playListMusicRemoved(ids)

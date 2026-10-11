@@ -11,6 +11,8 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    outputs:
+      official: ${{ steps.version.outputs.official }}
     env:
       SKIP_LIB_COPY: '1'
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -21,9 +23,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          node -e 'const {isRelease} = require("./scripts/ghcr-release.cjs"); require("node:fs").appendFileSync(process.env.GITHUB_OUTPUT, `official=${isRelease(process.env.REF_NAME)}\n`)'
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: npm run verify-notes
+      - run: node --test scripts/ghcr-release.test.cjs
       - run: npm run test:singer
       - run: pnpm -F @shared/eslint exec tsc -p ../../web-server/tsconfig.accounts.json
       - run: SKIP_LIB_COPY= pnpm build:web
@@ -46,12 +54,10 @@ jobs:
           tar -xzf work/extension-packages/metadata/ext.tgz -C work/extension-packages/metadata
           ACCOUNT_EXTENSION_PACKAGES="$PWD/work/extension-packages" node packages/web-server/tests/run.cjs extensions.test.ts
       - run: pnpm -F @shared/scripts build:desktop
-  image:
+  build-image:
     needs: checks
-    if: github.repository == 'xiao-baii/any-listen' && (startsWith(github.ref, 'refs/tags/multi-user-v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/multi-user'))
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
@@ -61,31 +67,49 @@ jobs:
           file: Dockerfile.multi-user
           platforms: linux/amd64
           push: false
-          outputs: type=docker,dest=${{ runner.temp }}/any-listen-linux-amd64.tar
-          tags: |
-            any-listen:${{ github.ref_name }}
-            any-listen:sha-${{ github.sha }}
-      - name: Verify exported image and prepare download
-        env:
-          IMAGE_TAG: ${{ github.ref_name }}
-        run: |
-          docker load -i "$RUNNER_TEMP/any-listen-linux-amd64.tar"
-          docker image inspect "any-listen:$IMAGE_TAG" --format '{{.Os}}/{{.Architecture}}'
-          cp compose.image.yml "$RUNNER_TEMP/compose.image.yml"
-          printf 'ANYLISTEN_TAG=%s\nPUBLIC_ORIGIN=https://music.example.com\nADMIN_USERNAME=admin\nADMIN_PASSWORD=\n' "$IMAGE_TAG" > "$RUNNER_TEMP/.env"
-          cp docs/image-import.md "$RUNNER_TEMP/README.md"
-          cd "$RUNNER_TEMP"
-          sha256sum any-listen-linux-amd64.tar > SHA256SUMS
-      - uses: actions/upload-artifact@v4
+  image:
+    needs: checks
+    if: github.repository == 'xiao-baii/any-listen' && github.event_name == 'push' && github.ref_type == 'tag' && needs.checks.outputs.official == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ghcr-multi-user-release
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
         with:
-          name: any-listen-${{ github.ref_name }}-linux-amd64
-          path: |
-            ${{ runner.temp }}/any-listen-linux-amd64.tar
-            ${{ runner.temp }}/compose.image.yml
-            ${{ runner.temp }}/.env
-            ${{ runner.temp }}/README.md
-            ${{ runner.temp }}/SHA256SUMS
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 0
+          node-version: 24
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Protect existing release tags
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ghcr-release.cjs prepare
+      - uses: docker/build-push-action@v6
+        id: build
+        if: steps.prepare.outputs.build == 'true'
+        with:
+          context: .
+          file: Dockerfile.multi-user
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/xiao-baii/any-listen:${{ github.ref_name }}
+            ghcr.io/xiao-baii/any-listen:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/xiao-baii/any-listen
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Verify published image and advance rolling tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_DIGEST: ${{ steps.build.outputs.digest }}
+        run: node scripts/ghcr-release.cjs publish

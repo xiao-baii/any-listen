@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
@@ -123,7 +122,7 @@ export const createAccountContext = async (options: {
   const hotkey = createHotKeyModule(stores.get)
   const dislike = createDislikeList(database)
   const proxy = createProxyService()
-  const files = createCache<string>({ max: 256 })
+  const files = createCache<string>({ max: 256, updateAgeOnGet: true })
   const draft = options.role === 'admin' ? createDraftExtensions({
     entry: options.workerEntry, directory: path.join(state.dataPath, 'extension'),
     origins: options.allowedOrigins, mirrors: () => site.ghMirrorHosts,
@@ -329,7 +328,9 @@ export const createAccountContext = async (options: {
       const file = files.get(name)
       if (!file) return
       ctx.type = getMimeType(path.extname(file))
-      ctx.body = createReadStream(file)
+      const stream = sources.openFile(file)
+      if (!stream) { ctx.status = 404; return }
+      ctx.body = stream
     })
     server.on('request', app.callback())
     server.on('upgrade', sockets.onUpgrade)
