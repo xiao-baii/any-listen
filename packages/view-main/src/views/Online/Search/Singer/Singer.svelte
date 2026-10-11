@@ -27,11 +27,11 @@
 </div>
 
 <style lang="less">
-  .singer-search { display: flex; flex: auto; min-width: 0; min-height: 0; padding-top: 10px; }
-  @media (max-width: 600px) {
-    .singer-search { flex-direction: column; }
-    .singer-search :global(.source-list) { width: auto; max-width: none; margin-right: 12px; }
-    .singer-search :global(.source-list .list) { display: flex; overflow-x: auto; }
-    .singer-search :global(.source-list .list-item) { flex: none; }
+  .singer-search {
+    display: flex;
+    flex-flow: row nowrap;
+    height: 100%;
+    min-height: 0;
+    padding-top: 10px;
   }
 </style>
