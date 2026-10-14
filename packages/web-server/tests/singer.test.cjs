@@ -82,6 +82,41 @@ test('singer navigation carries only the name and current or last online source'
   assert.equal(api.calls.pop().params.s, 'extension_detail')
 })
 
+test('online sources keep the platform across extensions and prefer the exact source', async () => {
+  const { matchSource, getSourceId, extensionState } = await load(`
+    export { matchSource, getSourceId } from './packages/view-main/src/views/Online/shared.svelte'
+    export { extensionState } from '@/modules/extension/store/state'
+  `, {
+    '@/modules/extension/reactive.svelte': 'export const resourceList = {}',
+    '@/modules/extension/store/event': 'export const extensionEvent = {}',
+    '@/modules/setting/reactive.svelte': 'export const useSettingValue = () => {}',
+    '@/plugins/routes': 'export const query = {}',
+  })
+  const source = (extensionId, id) => {
+    const item = { extensionId, id, name: id }
+    return { ...item, sId: getSourceId(item) }
+  }
+  const platforms = ['kg', 'kw', 'wy', 'tx', 'mg']
+  const music = platforms.map(id => source('online-metadata', id))
+  const singers = platforms.map(id => source('singer-metadata', id))
+  const custom = source('custom_extension', 'custom_platform')
+  extensionState.resourceList.resources = { musicSearch: [...music, custom], singerSearch: singers, singer: singers }
+
+  for (let i = 0; i < platforms.length; i++) {
+    assert.equal(matchSource(singers, music[i].sId), singers[i])
+    assert.equal(matchSource(music, singers[i].sId), music[i])
+    assert.equal(matchSource([singers[i], music[i]], music[i].sId), music[i])
+  }
+  const another = source('another', 'wy')
+  assert.equal(matchSource([another, singers[2]], music[2].sId), another)
+  const customSinger = source('another_extension', custom.id)
+  assert.equal(matchSource([customSinger], custom.sId), customSinger)
+  assert.equal(matchSource(singers, custom.sId), undefined)
+  assert.equal(matchSource(singers, 'unregistered_wy'), undefined)
+  assert.equal(matchSource(singers, undefined), undefined)
+  assert.equal(matchSource([], music[2].sId), undefined)
+})
+
 test('batch queue removal keeps remaining order and emits the existing events', async () => {
   const api = await load(`
     export { removePlayListMusic } from './packages/view-main/src/modules/player/store/commit'

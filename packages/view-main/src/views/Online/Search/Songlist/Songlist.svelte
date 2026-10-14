@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getSourceId, urlParamKeyMap, type ResourceListType, type SourceType, type ViewType } from '../../shared.svelte'
+  import { getSourceId, matchSource, urlParamKeyMap, type ResourceListType, type SourceType, type ViewType } from '../../shared.svelte'
   import Source from '../../Source.svelte'
   import { query, type Params } from '@/plugins/routes'
   import List from './List.svelte'
@@ -26,7 +26,7 @@
   $effect(() => {
     if (!list.length) return
     if (activeSource && list.some((s) => s.sId == activeSource.sId)) return
-    const s = list[0]
+    const s = matchSource(list, $query[urlParamKeyMap.source]) ?? list[0]
     untrack(() => {
       to(s)
     })

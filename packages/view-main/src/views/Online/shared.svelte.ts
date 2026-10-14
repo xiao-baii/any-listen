@@ -67,6 +67,13 @@ export interface SourceType extends ResourceType {
   sId: string
 }
 
+export const matchSource = (sources: SourceType[], sourceId: string | undefined) => {
+  const exact = sources.find((source) => source.sId === sourceId)
+  if (exact) return exact
+  const current = Object.values(extensionState.resourceList.resources).flat().find((source) => getSourceId(source) === sourceId)
+  return sources.find((source) => source.id === current?.id)
+}
+
 export const useActiveType = <T extends readonly string[]>(queryType: T) => {
   const q = fromStore(query)
   const activeType = $derived<T[number] | undefined>(
