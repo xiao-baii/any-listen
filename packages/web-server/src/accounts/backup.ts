@@ -60,7 +60,6 @@ export const registerAccountBackup = (router: Router<unknown, AnyListen.RequestC
           if (!music || typeof music.id !== 'string' || typeof music.name !== 'string' || !music.meta || music.isLocal !== false)
             throw new Error('Invalid song')
       }
-      validatePersonalData(lists)
       await sendAction({ action: 'list_data_overwrite', data: lists })
       ctx.body = { ok: true }
     } catch (error) {

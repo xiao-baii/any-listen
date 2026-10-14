@@ -226,7 +226,6 @@ export class SharedExtensions {
           )
             throw new Error('Invalid extension icon')
           const token = assetPrefix + randomUUID()
-          if (this.icons.size >= 32) throw new Error('Too many public source icons')
           this.icons.set(token, { file: resolved })
           return token
         },
@@ -340,8 +339,6 @@ export class SharedExtensions {
     // Account and playlist initialization stays available when public sources fail.
     if (name === 'getLocalExtensionList' && (!this.host || this.failure || this.violation)) return this.result([])
     if (name === 'getNewVersionInfo') return this.result({})
-    if (name === 'getExtensionLastLogs' && !this.host) return this.result([])
-    if (name === 'clearExtensionLogs' && !this.host) return this.result(undefined)
     if (name === 'getResourceList' && (!this.host || this.failure || this.violation))
       return this.result({ resources: {}, listProvider: [], commands: [] })
     if (!this.host || this.failure || this.violation)

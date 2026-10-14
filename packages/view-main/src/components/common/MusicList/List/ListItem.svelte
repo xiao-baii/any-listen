@@ -14,6 +14,8 @@
   import { useSettingValue } from '@/modules/setting/reactive.svelte'
   import MusicHeartBtn from '@/components/common/MusicHeartBtn.svelte'
   import { LIST_IDS } from '@any-listen/common/constants'
+  import { splitSingers } from '@any-listen/common/singers'
+  import { toSingerSearch } from '@/modules/resource/actions'
   // console.log(querystring)
   let {
     musicinfo,
@@ -47,6 +49,8 @@
   let picUrl = $state<null | string>(null)
   let hovered = $state(false)
   let isShowActionBtn = useSettingValue('list.isShowActionBtn')
+  const onlineEnabled = useSettingValue('onlineResource.enable')
+  const singers = $derived(splitSingers(musicinfo.singer))
   // let isPlaying = $derived(isplaylist && $playInfo.index === index)
   const badgeTypes = ['primary', 'secondary', 'tertiary'] as const
 
@@ -151,7 +155,22 @@
     {/if}
   </div>
   <div class="list-item-cell" style="flex: 0 0 22%;">
-    <span class="select" aria-label={musicinfo.singer}>{musicinfo.singer}</span>
+    {#if onlineEnabled.val}
+      {#each singers as singer, index (singer)}
+        {#if index}、{/if}<Btn
+          link
+          class={['singer-btn']}
+          aria-label={singer}
+          onkeydown={(event) => event.stopPropagation()}
+          onkeyup={(event) => event.stopPropagation()}
+          onclick={(event) => {
+            event.stopPropagation()
+            toSingerSearch(singer)
+          }}>{singer}</Btn>
+      {/each}
+    {:else}
+      <span class="select" aria-label={musicinfo.singer}>{musicinfo.singer}</span>
+    {/if}
   </div>
   <div class="list-item-cell" style="flex: 0 0 22%;">
     <span class="select" aria-label={musicinfo.meta.albumName}>{musicinfo.meta.albumName}</span>
@@ -162,6 +181,15 @@
 </div>
 
 <style lang="less">
+  .list-item-cell :global(.singer-btn) {
+    display: inline-block;
+    max-width: 100%;
+    .mixin-ellipsis-1();
+    font: inherit;
+    color: inherit;
+    vertical-align: baseline;
+  }
+
   .container {
     position: relative;
     display: flex;

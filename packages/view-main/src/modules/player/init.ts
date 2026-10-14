@@ -30,12 +30,13 @@ const init = async (isInited: boolean) => {
   setInited(false)
   initPlayerModules()
   sendCreatedEvent()
-  const [{ info, list, listId, source, historyList, isCollect }] = await Promise.all([
+  const [{ info, list, listId, source, singerQueue, historyList, isCollect }] = await Promise.all([
     getPlayInfo(),
     appState.workerInitPromiseMain,
   ])
   console.log(info)
   console.log(list, listId, historyList)
+  playerState.singerQueue = singerQueue
   initPlayList(list)
   initPlayInfo({
     duration: info.maxTime,

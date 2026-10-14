@@ -14,7 +14,6 @@ import {
   syncUserList,
 } from '@any-listen/app/modules/musicList'
 
-import { validatePersonalData } from '@/accounts/backup'
 import { getListsCover } from '@/app/modules/musicList'
 import { broadcast } from '@/modules/ipc/websocket'
 
@@ -22,7 +21,7 @@ import type { ExposeClientFunctions, ExposeServerFunctions } from '.'
 
 // 暴露给前端的方法
 export const createExposeList = (service = { getAllUserLists, getListMusics, getListsCover, getMusicExistListIds,
-  checkListExistMusic, sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncUserList, sortListMusics }, onlineOnly = false) => {
+  checkListExistMusic, sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncUserList, sortListMusics }) => {
   const { getAllUserLists, getListMusics, getListsCover, getMusicExistListIds, checkListExistMusic,
     sendMusicListAction, getListScrollInfo, saveListScrollPosition, syncUserList, sortListMusics } = service
   return {
@@ -42,7 +41,6 @@ export const createExposeList = (service = { getAllUserLists, getListMusics, get
       return checkListExistMusic(listId, musicId)
     },
     async listAction(event, action) {
-      if (onlineOnly) validatePersonalData(action)
       return sendMusicListAction(action)
     },
     async getListScrollPosition(event) {

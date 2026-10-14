@@ -1,3 +1,5 @@
+import { getDB } from '../../db'
+import { queryMetadataPlayListInfo, saveMetadataPlayListInfo } from '../metadata/playListInfo'
 import { databaseState } from '../../context'
 
 const getState = () =>
@@ -104,6 +106,43 @@ export const playListOverride = (newList: AnyListen.Player.PlayMusicInfo[]) => {
   overrideList(list)
   getState().playList = newList
   rebuildPosInfo(list)
+}
+
+export const getPlayListState = () => ({ list: getPlayList(), ...queryMetadataPlayListInfo() })
+
+/** Queue contents and continuation must become visible together. */
+export const playListSet = (data: AnyListen.IPCPlayer.PlayerActionSet) => {
+  const list = toDBList(data.list)
+  getDB().transaction(() => {
+    overrideList(list)
+    saveMetadataPlayListInfo(data.listId, data.source, data.singerQueue)
+  })()
+  getState().playList = data.list
+  rebuildPosInfo(list)
+}
+
+export const playListSingerPage = (data: AnyListen.IPCPlayer.PlayerActionSingerPage) => {
+  const metadata = queryMetadataPlayListInfo()
+  const queue = metadata.singerQueue
+  if (!queue || queue.queueId !== data.queueId || queue.nextPage !== data.page) return null
+  const current = getPlayList()
+  const ids = new Set(current.filter(item => !item.playLater).map(item => item.musicInfo.id))
+  const musics = data.musics.filter(item => {
+    if (ids.has(item.musicInfo.id)) return false
+    ids.add(item.musicInfo.id)
+    return true
+  })
+  const singerQueue = { ...queue, nextPage: data.page + 1, ended: data.ended,
+    startPage: data.complete ? 1 : queue.startPage }
+  const position = current.length ? getState().rawPoss.get(current.at(-1)!.itemId)! + 1 : 0
+  const list = toDBList(musics, position)
+  getDB().transaction(() => {
+    inertInfo(list)
+    saveMetadataPlayListInfo(metadata.listId, metadata.source, singerQueue)
+  })()
+  getState().playList = [...current, ...musics]
+  for (const item of list) getState().rawPoss.set(item.item_id, item.position)
+  return { ...data, musics }
 }
 
 /**

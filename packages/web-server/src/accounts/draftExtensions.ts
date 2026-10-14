@@ -144,7 +144,7 @@ export const createDraftExtensions = (options: {
       return run(async service => {
         if (name === 'downloadAndParseExtension') {
           if (typeof args[0] !== 'string' || !/^https?:\/\//.test(args[0])) throw new Error('Use an HTTP extension package URL')
-          if (staged.size >= 8) throw new Error('Too many staged extension packages; reopen the player')
+          if (staged.size >= 8) throw new Error('Too many staged extension packages; complete pending installations or wait for the account service to become idle and close')
           const item = await service.downloadAndParseExtension(args[0], args[1] as any)
           const token = randomUUID()
           staged.set(token, item)
@@ -154,9 +154,8 @@ export const createDraftExtensions = (options: {
           const token = (args[0] as { directory?: string })?.directory
           const item = token && staged.get(token)
           if (!item) throw new Error('Extension package expired')
-          const result = await service[name](item)
-          staged.delete(token)
-          return result
+          try { return await service[name](item) }
+          finally { staged.delete(token) }
         }
         return (service[name as keyof ExtensionSeriveTypes] as (...args: unknown[]) => Promise<unknown>)(...args)
       })

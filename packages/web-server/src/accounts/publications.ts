@@ -131,8 +131,10 @@ export class Publications {
     clearTimeout(this.recoveryTimer)
     this.recoveryTimer = undefined
     if (!automatic) this.recoveryAttempts = 0
+    let paused = false
     try {
       await this.runtimes.pauseStarts()
+      paused = true
       await this.loading
       const active = [...this.runtimes.entries.values()]
         .map((runtime) => runtime.user)
@@ -143,7 +145,7 @@ export class Publications {
       this.message = 'Public sources restored'
     } finally {
       this.running = false
-      this.runtimes.resumeStarts()
+      if (paused) this.runtimes.resumeStarts()
     }
   }
   private async loadPublished() {
@@ -167,11 +169,17 @@ export class Publications {
     const version = randomUUID()
     const target = path.join(this.runtimes.root, 'publications', version)
     let active: User[] = []
+    let paused = false
+    let switching = false
+    let adminStopped = false
     try {
       await this.runtimes.pauseStarts()
+      paused = true
       active = [...this.runtimes.entries.values()].map((r) => r.user)
       await this.runtimes.stop(admin.id)
+      adminStopped = active.some(user => user.id === admin.id)
       await snapshotExtensions(path.join(this.runtimes.root, 'users', admin.id, 'app', 'extension'), target)
+      switching = true
       await this.runtimes.sources.stop()
       for (const user of active) await this.runtimes.stop(user.id)
       await this.runtimes.sources.switch(version, target, this.runtimes.allowedMediaOrigins, this.runtimes.ghMirrorHosts)
@@ -190,60 +198,68 @@ export class Publications {
       })()
       this.message = 'Published'
     } catch (error) {
-      // Include accounts that started while the rollout was in progress.
-      const affected = new Map(
-        [...active, ...[...this.runtimes.entries.values()].map((r) => r.user)]
-          .map((u) => [u.id, u])
-      )
+      if (!paused) throw error
       const rollbackErrors: string[] = []
-      await this.runtimes.sources.stop()
-      for (const user of affected.values()) {
-        try {
-          await this.runtimes.stop(user.id)
-        } catch {
-          rollbackErrors.push(user.username)
-        }
-      }
-      try {
-        await this.runtimes.sources.switch(
-          previous,
-          path.join(this.runtimes.root, 'publications', previous ?? 'unpublished'),
-          this.runtimes.allowedMediaOrigins,
-          this.runtimes.ghMirrorHosts
+      if (switching) {
+        const affected = new Map(
+          [...active, ...[...this.runtimes.entries.values()].map((r) => r.user)]
+            .map((u) => [u.id, u])
         )
-        this.initialized = true
-      } catch {
-        rollbackErrors.push('public sources')
-      }
-      for (const user of affected.values()) {
-        try {
-          await this.runtimes.stop(user.id)
-          await this.runtimes.get(user, true)
-        } catch {
-          rollbackErrors.push(user.username)
+        try { await this.runtimes.sources.stop() }
+        catch { rollbackErrors.push('public source shutdown') }
+        for (const user of affected.values()) {
+          try {
+            await this.runtimes.stop(user.id)
+          } catch {
+            rollbackErrors.push(user.username)
+          }
         }
+        try {
+          await this.runtimes.sources.switch(
+            previous,
+            path.join(this.runtimes.root, 'publications', previous ?? 'unpublished'),
+            this.runtimes.allowedMediaOrigins,
+            this.runtimes.ghMirrorHosts
+          )
+          this.initialized = true
+        } catch {
+          rollbackErrors.push('public sources')
+        }
+        for (const user of affected.values()) {
+          try {
+            await this.runtimes.stop(user.id)
+            await this.runtimes.get(user, true)
+          } catch {
+            rollbackErrors.push(user.username)
+          }
+        }
+      } else if (adminStopped) {
+        try { await this.runtimes.get(admin, true) }
+        catch { rollbackErrors.push(admin.username) }
       }
       this.message = `Publication failed: ${(error as Error).message}${rollbackErrors.length ? `. Rollback needs retry: ${rollbackErrors.join(', ')}` : ''}`
       this.accounts.audit(admin.id, 'extension.publish.failed', version)
       fail(400, this.message)
     } finally {
-      // The host runs a copy in source-runtime; only the committed snapshot is needed for recovery.
-      try {
-        const directory = path.join(this.runtimes.root, 'publications')
-        const current = this.accounts.state('publication')
-        const entries = await readdir(directory, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
-          if (error.code === 'ENOENT') return []
-          throw error
-        })
-        for (const entry of entries) {
-          if (entry.isDirectory() && entry.name !== current)
-            await rm(path.join(directory, entry.name), { recursive: true, force: true })
+      if (paused) {
+        // The host runs a copy in source-runtime; only the committed snapshot is needed for recovery.
+        try {
+          const directory = path.join(this.runtimes.root, 'publications')
+          const current = this.accounts.state('publication')
+          const entries = await readdir(directory, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return []
+            throw error
+          })
+          for (const entry of entries) {
+            if (entry.isDirectory() && entry.name !== current)
+              await rm(path.join(directory, entry.name), { recursive: true, force: true })
+          }
+        } catch (error) {
+          this.message += `. Snapshot cleanup failed: ${(error as Error).message}`
         }
-      } catch (error) {
-        this.message += `. Snapshot cleanup failed: ${(error as Error).message}`
+        this.runtimes.resumeStarts()
       }
       this.running = false
-      this.runtimes.resumeStarts()
     }
   }
 }

@@ -79,7 +79,7 @@ export const createAccountContext = async (options: {
     warn: (...args: unknown[]) => logs.App.logcat.warn(`[Account ${id}]`, ...args),
     error: (...args: unknown[]) => logs.App.logcat.error(`[Account ${id}]`, ...args),
   }
-  const stores = createAccountStores(state.dataPath, logger)
+  const stores = createAccountStores(state.dataPath)
   const event = new Event()
   const appEvent = event as EventType<Event>
   const pending = new Set<Promise<unknown>>()
@@ -226,7 +226,7 @@ export const createAccountContext = async (options: {
           const list = (await lists.getAllUserLists()).userList.find(list => list.id === id)
           if (list?.type !== 'online') throw new Error('Not an online list')
           await sync.syncList(list)
-        }, sortListMusics: async () => { throw new Error('Local list sorting is unavailable') } }, true),
+        }, sortListMusics: async () => { throw new Error('Local list sorting is unavailable') } }),
       async inited(socket: ServerSocket) { socket.isInited = true; socketEvent.new_socket_inited(socket) },
       async getAppInfo() { return { machineId: id, proxyServerHost: `/u/${id}` } },
       async getSetting() { return state.appSetting },
@@ -282,7 +282,6 @@ export const createAccountContext = async (options: {
       getAppLogs: (_socket: ServerSocket, type: AnyListen.LogType) => logs[type].getLogs(),
       clearAppLog: (_socket: ServerSocket, type: AnyListen.LogType) => logs[type].clearLog(),
       getExtensionList: () => draft.call('getLocalExtensionList', []),
-      restartExtensionHost: () => draft.call('getLocalExtensionList', []),
       getExtensionLastLogs: (_socket: ServerSocket, id?: string) => sourceCall('getExtensionLastLogs', [id]),
       clearExtensionLogs: (_socket: ServerSocket, id?: string) => sourceCall('clearExtensionLogs', [id]),
     })

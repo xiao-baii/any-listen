@@ -160,6 +160,12 @@ test(
       assert.equal(persisted.split('extension-log-persistence-marker').length - 1, 2)
       const pageLogs = (await host.call('getExtensionLastLogs', ['fixture-metadata'])).value as Array<{ logs: string }>
       assert.match(pageLogs[0].logs, /extension-log-persistence-marker/)
+      await host.stop()
+      await assert.rejects(host.call('getExtensionLastLogs', ['fixture-metadata']), /No public source is published/)
+      await assert.rejects(host.call('clearExtensionLogs', ['fixture-metadata']), /No public source is published/)
+      assert.equal(await readFile(logFile, 'utf8'), persisted)
+      assert.deepEqual((await host.call('getResourceList', [])).value, { resources: {}, listProvider: [], commands: [] })
+      await host.switch('logs-restored', directory, [], '')
       await host.call('clearExtensionLogs', ['fixture-metadata'])
       assert.equal(await readFile(logFile, 'utf8'), '')
       assert.equal(host.status().workers, 1)
@@ -194,3 +200,31 @@ test(
     }
   }
 )
+
+test('public sources load every extension when more than 32 have icons', { timeout: 30000 }, async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'any-listen-source-icons-'))
+  const host = new SharedExtensions(path.join(process.env.ACCOUNT_TEST_ROOT!, 'build/server/extension-service.worker.js'), root)
+  const directory = path.join(root, 'release')
+  const settings = Array.from({ length: 33 }, (_, index) => ({ id: `icon-${index}`, enabled: true }))
+  try {
+    for (const { id } of settings) {
+      const extension = path.join(directory, 'ext', id)
+      await mkdir(extension, { recursive: true })
+      await writeFile(path.join(extension, 'manifest.json'), JSON.stringify({
+        id, name: id, main: 'index.js', version: '1.0.0', icon: 'icon.svg',
+      }))
+      await writeFile(path.join(extension, 'index.js'), '')
+      await writeFile(path.join(extension, 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>')
+    }
+    await writeFile(path.join(directory, 'extensions.json'), JSON.stringify(settings))
+    await host.switch('icons', directory, [], '')
+    const result = await host.call('getLocalExtensionList', [])
+    const extensions = result.value as AnyListen.Extension.Extension[]
+    assert.deepEqual(extensions.map(extension => extension.id).sort(), settings.map(setting => setting.id).sort())
+    assert(extensions.every(extension => extension.loaded && result.assets[extension.icon!]))
+    assert.equal(Object.keys(result.assets).length, 33)
+  } finally {
+    await host.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})

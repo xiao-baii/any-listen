@@ -1,15 +1,16 @@
 import { buildUrl } from '@any-listen/web'
 
+import { showNotify } from '@/components/apis/notify'
 import { onRelease } from '@/modules/app/shared'
 import { appState } from '@/modules/app/store/state'
 import { settingEvent } from '@/modules/setting/store/event'
 import { settingState } from '@/modules/setting/store/state'
-import { getCurrentTime, onTimeupdate } from '@/plugins/player'
+import { getCurrentTime, onPlaying, onTimeupdate } from '@/plugins/player'
 import { createUnsubscriptionSet } from '@/shared'
 
 import { onPlayerCreated } from '../shared'
 import { playerEvent } from '../store/event'
-import { getNextPlayMusicInfo, resetRandomNextMusicInfo } from '../store/playerActions'
+import { getNextPlayMusicInfo, prefetchSingerQueue, resetRandomNextMusicInfo } from '../store/playerActions'
 import { getMusicUrl } from '../store/playerRemoteAction'
 import { playerState } from '../store/state'
 
@@ -61,9 +62,11 @@ const checkMusicUrl = async (url: string): Promise<boolean> => {
 const preloadMusicInfo = {
   isLoading: false,
   preProgress: 0,
+  failed: false,
   info: null as AnyListen.Player.PlayMusicInfo | null,
 }
 const resetPreloadInfo = () => {
+  preloadMusicInfo.failed = false
   preloadMusicInfo.preProgress = 0
   preloadMusicInfo.info = null
   preloadMusicInfo.isLoading = false
@@ -72,7 +75,19 @@ const preloadNextMusicUrl = async (curTime: number) => {
   if (preloadMusicInfo.isLoading || curTime - preloadMusicInfo.preProgress < 3) return
   preloadMusicInfo.isLoading = true
   console.log('preload next music url')
-  const info = await getNextPlayMusicInfo()
+  const current = playerState.playMusicInfo
+  let info: AnyListen.Player.PlayMusicInfo | null
+  try {
+    info = await getNextPlayMusicInfo()
+  } catch (error) {
+    if (playerState.playMusicInfo === current) {
+      preloadMusicInfo.failed = true
+      showNotify((error as Error).message)
+    }
+    preloadMusicInfo.isLoading = false
+    return
+  }
+  if (playerState.playMusicInfo !== current) return
   if (info) {
     preloadMusicInfo.info = info
     const { url } = await getMusicUrl({ musicInfo: info.musicInfo }).catch(() => ({ url: '' }))
@@ -101,6 +116,17 @@ export const initPreloadNextMusic = () => {
         })
       )
       unregistered.add(playerEvent.on('musicChanged', resetPreloadInfo))
+      let prefetchedItem: string | undefined
+      unregistered.add(onPlaying(() => {
+        const item = playerState.playMusicInfo?.itemId
+        if (prefetchedItem === item) return
+        prefetchedItem = item
+        void prefetchSingerQueue().catch((error: Error) => {
+          if (playerState.playMusicInfo?.itemId !== item) return
+          preloadMusicInfo.failed = true
+          showNotify(error.message)
+        })
+      }))
       unregistered.add(
         settingEvent.on('updated', (keys) => {
           if (keys.includes('player.togglePlayMethod')) {
@@ -115,7 +141,7 @@ export const initPreloadNextMusic = () => {
         onTimeupdate(() => {
           const time = getCurrentTime()
           const duration = playerState.progress.maxPlayTime
-          if (duration > PRELOAD_TIME && duration - time < PRELOAD_TIME && !preloadMusicInfo.info) {
+          if (duration > PRELOAD_TIME && duration - time < PRELOAD_TIME && !preloadMusicInfo.info && !preloadMusicInfo.failed) {
             void preloadNextMusicUrl(time)
           }
         })

@@ -46,7 +46,8 @@ export class Accounts {
     return this.db.prepare('SELECT * FROM users WHERE username = ?').get(username) as User | undefined
   }
   list() {
-    return (this.db.prepare('SELECT * FROM users ORDER BY createdAt').all() as User[]).map(publicUser)
+    return (this.db.prepare('SELECT * FROM users ORDER BY createdAt').all() as User[])
+      .map(user => ({ ...publicUser(user), deleting: this.state(`user.deleting:${user.id}`) === 'true' }))
   }
   audit(actor: string | null, action: string, target?: string) {
     this.db.prepare('INSERT INTO audit(actor,action,target,time) VALUES(?,?,?,?)').run(actor, action, target ?? null, Date.now())
@@ -77,8 +78,8 @@ export class Accounts {
     const valid = await verifyPassword(password, user?.passwordHash ?? dummy)
     if (!user || user.disabled || !valid) fail(401, 'Invalid username or password')
     // Recheck after asynchronous password derivation in case an administrator changed the account.
-    const current = this.get(user!.id)!
-    if (current.disabled || current.passwordHash !== user!.passwordHash) fail(401, 'Invalid username or password')
+    const current = this.get(user!.id)
+    if (!current || current.disabled || current.passwordHash !== user!.passwordHash) return fail(401, 'Invalid username or password')
     const token = newToken(),
       now = Date.now(),
       id = randomUUID()
@@ -109,6 +110,7 @@ export class Accounts {
     authorize?.()
     if (!this.get(id)) fail(404, 'Account not found')
     this.db.transaction(() => {
+      if (this.state(`user.deleting:${id}`)) fail(409, 'Account deletion is unfinished')
       const current = this.get(id)!
       if (expectedHash && (current.disabled || current.passwordHash !== expectedHash))
         fail(409, 'Account changed. Sign in again.')
@@ -122,9 +124,29 @@ export class Accounts {
       const user = this.get(id)
       if (!user) fail(404, 'Account not found')
       if (disabled && user!.role === 'admin') fail(409, 'Cannot disable the administrator')
+      if (this.state(`user.deleting:${id}`)) fail(409, 'Account deletion is unfinished')
       this.db.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(Number(disabled), id)
       if (disabled) this.db.prepare('DELETE FROM sessions WHERE userId = ?').run(id)
       this.audit(actor, disabled ? 'user.disable' : 'user.enable', id)
+    })()
+  }
+  beginDeletion(id: string) {
+    return this.db.transaction(() => {
+      const user = this.get(id)
+      if (!user) return fail(404, 'Account not found')
+      if (user.role === 'admin') fail(409, 'Cannot delete the administrator')
+      if (!user.disabled) fail(409, 'Disable the account before deleting it')
+      this.setState(`user.deleting:${id}`, 'true')
+      return user
+    })()
+  }
+  delete(id: string, actor: string) {
+    this.db.transaction(() => {
+      if (!this.state(`user.deleting:${id}`)) fail(409, 'Account deletion has not started')
+      this.db.prepare('DELETE FROM sessions WHERE userId = ?').run(id)
+      this.db.prepare('DELETE FROM users WHERE id = ?').run(id)
+      this.db.prepare('DELETE FROM state WHERE key = ?').run(`user.deleting:${id}`)
+      this.audit(actor, 'user.delete', id)
     })()
   }
   state(key: string) {

@@ -17,15 +17,18 @@ export class Event extends _Event {
     this.emitEvent('playerAction', action)
   }
 
-  async playListAction(action: AnyListen.IPCPlayer.PlayListAction): Promise<void> {
+  async playListAction(action: AnyListen.IPCPlayer.PlayListAction): Promise<AnyListen.IPCPlayer.PlayerActionSingerPage | null | void> {
     const dbService = this.getDatabase()
     switch (action.action) {
       case 'set':
-        await Promise.all([
-          dbService.playListOverride(action.data.list),
-          dbService.saveMetadataPlayListInfo(action.data.listId, action.data.source),
-        ])
+        await dbService.playListSet(action.data)
         break
+      case 'singerPage': {
+        const data = await dbService.playListSingerPage(action.data)
+        if (!data) return null
+        this.emitEvent('playListAction', { action: 'singerPage', data })
+        return data
+      }
       case 'add':
         await dbService.playListAdd(action.data.pos, action.data.musics)
         break

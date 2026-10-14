@@ -21,6 +21,14 @@ declare namespace AnyListen {
       list: Player.PlayMusicInfo[]
       source: Player.SourceType
       isSync?: boolean
+      singerQueue?: Player.SingerQueue
+    }
+    interface PlayerActionSingerPage {
+      queueId: string
+      page: number
+      musics: Player.PlayMusicInfo[]
+      ended: boolean
+      complete?: boolean
     }
     interface PlayerActionAdd {
       musics: Player.PlayMusicInfo[]
@@ -37,6 +45,7 @@ declare namespace AnyListen {
     type PlayListAction =
       | IPCAction<'set', PlayerActionSet>
       | IPCAction<'add', PlayerActionAdd>
+      | IPCAction<'singerPage', PlayerActionSingerPage>
       | IPCAction<'remove', PlayerActionRemove>
       | IPCAction<'update', PlayerActionUpdate>
       | IPCAction<'played', PlayerActionPlayed>
@@ -94,6 +103,7 @@ declare namespace AnyListen {
       list: Player.PlayMusicInfo[]
       listId: string | null
       source: Player.SourceType
+      singerQueue?: Player.SingerQueue
       historyList: PlayHistoryListItem[]
       isCollect: boolean
     }
@@ -103,7 +113,7 @@ declare namespace AnyListen {
       getPlayInfo: () => PlayInfo
       /** 歌曲播放事件 */
       playerEvent: (event: PlayerEvent) => void
-      playListAction: (action: PlayListAction) => void
+      playListAction: (action: PlayListAction) => PlayerActionSingerPage | null | void
       playHistoryListAction: (action: PlayHistoryListAction) => void
     }>
     type ServerIPCActions<Socket = undefined> = IPC.WarpIPCHandlerActions<Socket, ServerActions>

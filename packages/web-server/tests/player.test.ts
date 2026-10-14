@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import fs from 'node:fs'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -199,28 +200,33 @@ test('progress store serializes concurrent writes and awaits the latest value', 
   }
 })
 
-test('account stores isolate identical names, recover invalid files and release their cache', async () => {
+test('account stores isolate names, preserve unreadable files and release their cache', async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'any-listen-stores-'))
-  const a = createAccountStores(path.join(root, 'a'), { error() {}, warn() {} })
-  const b = createAccountStores(path.join(root, 'b'), { error() {}, warn() {} })
+  const a = createAccountStores(path.join(root, 'a'))
+  const b = createAccountStores(path.join(root, 'b'))
   try {
     a.get('settings').set('theme', 'a')
     b.get('settings').set('theme', 'b')
     assert.equal(a.get('settings').get('theme'), 'a')
     assert.equal(b.get('settings').get('theme'), 'b')
     await writeFile(path.join(root, 'a', 'broken.json'), 'invalid')
-    const repaired = a.get('broken')
-    repaired.set('fixed', true)
-    assert.equal(a.get('broken'), repaired)
-    assert.equal(await readFile(path.join(root, 'a', 'broken.json.bak'), 'utf8'), 'invalid')
-    await writeFile(path.join(root, 'a', 'blocked.json'), 'invalid')
-    await mkdir(path.join(root, 'a', 'blocked.json.bak'))
-    assert.throws(() => a.get('blocked'))
-    assert.equal(await readFile(path.join(root, 'a', 'blocked.json'), 'utf8'), 'invalid')
+    assert.throws(() => a.get('broken'), SyntaxError)
+    assert.throws(() => a.get('broken'), SyntaxError)
+    assert.equal(await readFile(path.join(root, 'a', 'broken.json'), 'utf8'), 'invalid')
+    const content = '{"theme":"preserved"}'
+    await writeFile(path.join(root, 'a', 'blocked.json'), content)
+    const readError = Object.assign(new Error('Cannot read configuration'), { code: 'EACCES' })
+    const read = t.mock.method(fs, 'readFileSync', () => { throw readError })
+    try {
+      assert.throws(() => a.get('blocked'), error => error === readError)
+    } finally { read.mock.restore() }
+    assert.equal(await readFile(path.join(root, 'a', 'blocked.json'), 'utf8'), content)
+    assert.deepEqual((await readdir(path.join(root, 'a'))).sort(), ['blocked.json', 'broken.json', 'settings.json'])
+    assert.equal(a.get('blocked').get('theme'), 'preserved')
     assert.throws(() => a.get('../b/settings'), /Invalid/)
     a.close()
     assert.throws(() => a.get('settings'), /closed/)
-    const reopened = createAccountStores(path.join(root, 'a'), console)
+    const reopened = createAccountStores(path.join(root, 'a'))
     assert.equal(reopened.get('settings').get('theme'), 'a')
     reopened.close()
   } finally {

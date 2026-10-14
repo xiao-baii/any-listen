@@ -153,7 +153,8 @@ export class Runtimes {
 
   async stop(id: string) {
     if (this.stopping.has(id)) return this.stopping.get(id)
-    const action = this.stopOne(id).finally(() => this.stopping.delete(id))
+    // A failed close must not become a successful no-op on the next deletion attempt.
+    const action = this.stopOne(id).then(() => { this.stopping.delete(id) })
     this.stopping.set(id, action)
     return action
   }
@@ -177,6 +178,7 @@ export class Runtimes {
   }
   retry(id: string) {
     this.failures.delete(id)
+    if (!this.entries.has(id) && !this.starting.has(id)) this.stopping.delete(id)
   }
   async close() {
     this.closed = true

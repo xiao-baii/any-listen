@@ -17,6 +17,17 @@ declare namespace AnyListen {
 
     type SourceType = 'local' | 'songlist' | 'topSongs' | 'search' | 'album' | 'singer'
 
+    interface SingerQueue {
+      queueId: string
+      extensionId: string
+      source: string
+      singerId: string
+      startPage: number
+      nextPage: number
+      limit: number
+      ended: boolean
+    }
+
     interface PlayMusicInfo {
       /**
        * 当前信息唯一ID

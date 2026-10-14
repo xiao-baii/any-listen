@@ -307,3 +307,42 @@ test('two account databases isolate identical song ids, queues and metadata and 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+
+test('singer continuation commits atomically, rejects stale pages, and survives reopen', async () => {
+  const fixture = await openTestDatabase()
+  let db = fixture.db
+  const item = (id: string): AnyListen.Player.PlayMusicInfo => ({
+    itemId: id, listId: 'artist', source: 'singer', played: false, playLater: false, musicInfo: song(id),
+  })
+  const singerQueue: AnyListen.Player.SingerQueue = {
+    queueId: 'queue', extensionId: 'ext', source: 'test', singerId: 'artist',
+    startPage: 2, nextPage: 3, limit: 2, ended: false,
+  }
+  try {
+    db.service.playListSet({ listId: null, source: 'singer', list: [item('a')], singerQueue })
+    const page = { queueId: 'queue', page: 3, musics: [item('a'), item('b'), item('b')], ended: false }
+    assert.equal(db.service.playListSingerPage({ ...page, queueId: 'old' }), null)
+    const context = [...getManagedDatabaseContexts()].at(-1)!
+    context.db!.exec(`CREATE TEMP TRIGGER fail_metadata BEFORE INSERT ON metadata BEGIN SELECT RAISE(ABORT, 'metadata failure'); END`)
+    assert.throws(() => db.service.playListSingerPage(page), /metadata failure/)
+    assert.throws(() => db.service.playListSet({ listId: null, source: 'singer', list: [item('wrong')] }), /metadata failure/)
+    assert.deepEqual(db.service.getPlayList().map(item => item.itemId), ['a'])
+    assert.deepEqual(db.service.queryMetadataPlayListInfo().singerQueue, singerQueue)
+    context.db!.exec('DROP TRIGGER fail_metadata')
+    assert.deepEqual(db.service.playListSingerPage(page)?.musics.map(item => item.itemId), ['b'])
+    assert.equal(db.service.playListSingerPage(page), null)
+    db.close()
+    db = await fixture.open()
+    assert.deepEqual(db.service.getPlayList().map(item => item.itemId), ['a', 'b'])
+    assert.equal(db.service.queryMetadataPlayListInfo().singerQueue?.nextPage, 4)
+    db.service.playListSingerPage({ ...page, page: 4, musics: [], ended: true })
+    assert.equal(db.service.queryMetadataPlayListInfo().singerQueue?.ended, true)
+    db.service.playListSet({ listId: 'local', source: 'local', list: [item('new')] })
+    assert.equal(db.service.queryMetadataPlayListInfo().singerQueue, undefined)
+    assert.equal(db.service.playListSingerPage({ ...page, page: 5 }), null)
+  } finally {
+    db.close()
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})

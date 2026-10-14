@@ -1,4 +1,5 @@
 {
+  "singer_preparing_all": "Preparing all tracks…",
   "singer_label": "Singer",
   "singer_play_loop": "Loop play",
   "singer_unsupported": "No singer metadata extension is enabled. Ask the administrator to install and publish one.",

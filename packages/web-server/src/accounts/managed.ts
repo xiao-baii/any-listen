@@ -134,12 +134,6 @@ export const protectRpc = <T extends object>(rpc: T, context: { role: 'admin' | 
           if (alwaysDenied.has(name) || (context.role !== 'admin' && !userAllowed.has(name)))
             throw new Error('Forbidden')
           return await context.run(async () => {
-            if (name === 'getExtensionErrorMessage' && context.role !== 'admin') return null
-            if (name === 'getNewVersionInfo' && context.role !== 'admin') return {}
-            if (name === 'getResourceList' && context.role !== 'admin') {
-              const resources = await fn(...args)
-              return { ...resources, commands: [], listProvider: [] }
-            }
             if (name === 'getExtensionList' && context.role !== 'admin') {
               const list = (await fn(...args)) as Array<Record<string, unknown>>
               return list.map(sanitizeExtension)

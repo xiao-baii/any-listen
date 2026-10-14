@@ -46,6 +46,12 @@ export const back = () => {
   }
 }
 
+export const toSingerSearch = (name: string) => {
+  const loc = getLocation()
+  const params = loc.location.startsWith('/online') ? loc.query : historys.at(-1)?.[1]
+  pushRoute('/online', { t: 'search', qt: 'singer', q: name, s: params?.sid ?? params?.s })
+}
+
 const buildQueryParams = (params: Params, text?: string) => {
   if (text != null) {
     if (text) params[urlParamKeyMap.query] = text

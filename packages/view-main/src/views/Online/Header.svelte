@@ -4,6 +4,7 @@
   import { tabIcons, viewResourceMap, viewTypes, urlParamKeyMap } from './shared.svelte'
   import { resourceList } from '@/modules/extension/reactive.svelte'
   import { pushRoute } from '@/modules/resource/actions'
+  import { query } from '@/plugins/routes'
 
   let { activeview }: { activeview: (typeof viewTypes)[number] } = $props()
   const typeList = $derived.by(() => {
@@ -27,7 +28,7 @@
     value={activeview}
     min
     onchange={(item) => {
-      pushRoute('/online', { [urlParamKeyMap.type]: item.id })
+      pushRoute('/online', { [urlParamKeyMap.type]: item.id, [urlParamKeyMap.source]: $query[urlParamKeyMap.source] })
     }}
   />
   <div id="online-header-right"></div>

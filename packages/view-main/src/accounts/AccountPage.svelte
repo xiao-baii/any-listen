@@ -1,13 +1,14 @@
 <script lang="ts">
   import Btn from '@/components/base/Btn.svelte'
   import Input from '@/components/base/Input.svelte'
+  import { showSimpleConfirmModal } from '@/components/apis/dialog'
   import defaultSetting from '@any-listen/common/defaultSetting'
   import { onMount } from 'svelte'
   import { account, accountRequest, type CurrentUser } from './state.svelte'
 
   let username = $state(''), password = $state(''), newPassword = $state('')
   let error = $state(''), message = $state(''), busy = $state(false)
-  let users = $state<CurrentUser[]>([])
+  let users = $state<Array<CurrentUser & { deleting: boolean }>>([])
   let sessions = $state<Array<{ id: string; userAgent: string; ip: string; createdAt: number }>>([])
   let currentId = $state('')
   let createUsername = $state(''), temporaryPassword = $state(''), resetPassword = $state('')
@@ -44,6 +45,18 @@
     location.assign('/')
   })
   const logout = () => run(async () => { await accountRequest('/logout', 'POST'); location.assign('/') })
+  const deleteUser = (user: CurrentUser) => run(async () => {
+    if (!await showSimpleConfirmModal(`永久删除账号“${user.username}”？\n该账号的歌单、收藏、历史、队列、设置和缓存将一并删除，此操作无法撤销。`, {
+      cancelBtn: '取消', confirmBtn: '永久删除',
+    })) return
+    try {
+      await accountRequest(`/users/${user.id}`, 'DELETE')
+      if (resetId === user.id) { resetId = ''; resetPassword = '' }
+      message = '账号及个人数据已永久删除。'
+    } finally {
+      await refresh()
+    }
+  })
   const publish = () => run(async () => {
     publication = { ...publication, running: true, message: '正在验证音源配置…' }
     try { publication = await accountRequest('/publication', 'POST') }
@@ -110,9 +123,11 @@
           <label>用户名<Input bind:value={createUsername} /></label><label>密码<Input type="password" bind:value={temporaryPassword} /></label>
           <Btn rawtype="submit" disabled={busy}>创建账号</Btn>
         </form><div class="table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>状态</th><th>操作</th></tr></thead><tbody>
-          {#each users as user}<tr><td>{user.username}</td><td>{user.role === 'admin' ? '管理员' : '用户'}</td><td>{user.disabled ? '已禁用' : '正常'}</td><td class="commands"><Btn disabled={busy} onclick={() => run(async () => { await accountRequest(`/users/${user.id}/disabled`, 'POST', { disabled: !user.disabled }); await refresh() })}>{user.disabled ? '恢复' : '禁用'}</Btn><Btn disabled={busy} onclick={() => { resetId = user.id; resetPassword = '' }}>重置密码</Btn></td></tr>{/each}
+          {#each users as user}<tr><td>{user.username}</td><td>{user.role === 'admin' ? '管理员' : '用户'}</td><td>{user.deleting ? '删除未完成' : user.disabled ? '已禁用' : '正常'}</td><td class="commands"><Btn disabled={busy || user.deleting} onclick={() => run(async () => { await accountRequest(`/users/${user.id}/disabled`, 'POST', { disabled: !user.disabled }); await refresh() })}>{user.disabled ? '恢复' : '禁用'}</Btn><Btn disabled={busy || user.deleting} onclick={() => { resetId = user.id; resetPassword = '' }}>重置密码</Btn>
+            {#if user.role === 'user' && user.disabled}<Btn disabled={busy} onclick={() => deleteUser(user)}>{user.deleting ? '重试删除' : '永久删除'}</Btn>{/if}
+          </td></tr>{/each}
         </tbody></table></div>
-        {#if resetId}<form onsubmit={(e) => { e.preventDefault(); void run(async () => { await accountRequest(`/users/${resetId}/password`, 'POST', { password: resetPassword }); resetId = ''; resetPassword = ''; message = '密码已重置。'; await refresh() }) }}><label>新密码<Input type="password" bind:value={resetPassword} /></label><Btn rawtype="submit" disabled={busy}>确认重置</Btn><Btn onclick={() => { resetId = '' }}>取消</Btn></form>{/if}
+        {#if resetId && !users.find(user => user.id === resetId)?.deleting}<form onsubmit={(e) => { e.preventDefault(); void run(async () => { await accountRequest(`/users/${resetId}/password`, 'POST', { password: resetPassword }); resetId = ''; resetPassword = ''; message = '密码已重置。'; await refresh() }) }}><label>新密码<Input type="password" bind:value={resetPassword} /></label><Btn rawtype="submit" disabled={busy}>确认重置</Btn><Btn onclick={() => { resetId = '' }}>取消</Btn></form>{/if}
         </section>
         <section><h2>账号运行状态</h2><Btn disabled={busy} onclick={() => run(refresh)}>刷新状态</Btn>
           {#if runtimes.gatewayRss}<p>共享进程：{(runtimes.gatewayRss / 1024 / 1024).toFixed(1)} MiB</p>{/if}

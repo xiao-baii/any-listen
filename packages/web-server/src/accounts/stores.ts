@@ -1,9 +1,8 @@
-import fs from 'node:fs'
 import path from 'node:path'
 
 import Store from '@any-listen/nodejs/Store'
 
-export const createAccountStores = (dataPath: string, log: Pick<Console, 'error' | 'warn'>) => {
+export const createAccountStores = (dataPath: string) => {
   const stores = new Map<string, Store>()
   let closed = false
   return {
@@ -12,17 +11,7 @@ export const createAccountStores = (dataPath: string, log: Pick<Console, 'error'
       if (!/^[a-zA-Z0-9_.-]+$/.test(name) || name === '.' || name === '..') throw new Error('Invalid store name')
       const cached = stores.get(name)
       if (cached) return cached
-      const storePath = path.join(dataPath, `${name}.json`)
-      let store: Store
-      try {
-        store = new Store(storePath, false)
-      } catch (error) {
-        log.error(error)
-        const backupPath = `${storePath}.bak`
-        fs.renameSync(storePath, backupPath)
-        log.warn(`${name} data load error; original file saved to ${backupPath}`)
-        store = new Store(storePath, true)
-      }
+      const store = new Store(path.join(dataPath, `${name}.json`))
       stores.set(name, store)
       return store
     },

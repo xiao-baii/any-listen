@@ -241,21 +241,17 @@ export const createPlayerModule = (
 
   const getPlayInfo = async (): Promise<AnyListen.IPCPlayer.PlayInfo> => {
     const playInfo = await currentPlayer().getPlayInfo()
-    const [[list, isCollect], { listId, source }, historyList] = await Promise.all([
-      workers.dbService.getPlayList().then(async (list) => {
-        const minfo = list[playInfo.index]
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (!minfo) return [list, false] as const
-        return [list, await checkCollect(minfo)] as const
-      }),
-      workers.dbService.queryMetadataPlayListInfo(),
+    const [{ list, listId, source, singerQueue }, historyList] = await Promise.all([
+      workers.dbService.getPlayListState(),
       workers.dbService.queryMetadataPlayHistoryList(),
     ])
+    const isCollect = list[playInfo.index] ? await checkCollect(list[playInfo.index]) : false
     return {
       info: playInfo,
       list,
       listId,
       source,
+      singerQueue,
       historyList,
       isCollect,
     }

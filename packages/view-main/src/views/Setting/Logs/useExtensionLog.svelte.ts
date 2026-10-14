@@ -102,10 +102,15 @@ export const useExtensionLog = (data: {
       return logsFormat
     },
     clearExtensionLog: async (id: string) => {
+      try {
+        await clearExtensionLogs(id)
+      } catch (error) {
+        showNotify((error as Error).message)
+        return
+      }
       const logItem = extensionLogItems.find((item) => item.id === id)
       if (logItem) logItem.log = ''
       if (data.activeLogType === 'extension' && data.avtiveLog === id) data.activeLogContent = ''
-      void clearExtensionLogs(id)
     },
   }
 }

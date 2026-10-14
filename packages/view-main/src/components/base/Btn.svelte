@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import type { MouseEventHandler } from 'svelte/elements'
+  import type { KeyboardEventHandler, MouseEventHandler } from 'svelte/elements'
 
   let {
     min = false,
@@ -10,6 +10,8 @@
     disabled = false,
     loading = false,
     onclick,
+    onkeydown,
+    onkeyup,
     oncontextmenu,
     onmouseenter,
     onmouseleave,
@@ -32,6 +34,8 @@
     icontext?: boolean
     rawtype?: 'button' | 'submit' | 'reset'
     onclick?: (event: Parameters<MouseEventHandler<HTMLButtonElement>>[0]) => Promise<unknown> | unknown
+    onkeydown?: KeyboardEventHandler<HTMLButtonElement>
+    onkeyup?: KeyboardEventHandler<HTMLButtonElement>
     oncontextmenu?: MouseEventHandler<HTMLButtonElement>
     onmouseenter?: MouseEventHandler<HTMLButtonElement>
     onmouseleave?: MouseEventHandler<HTMLButtonElement>
@@ -58,6 +62,8 @@
     }
   }}
   {oncontextmenu}
+  {onkeydown}
+  {onkeyup}
   {onmouseenter}
   {onmouseleave}
 >

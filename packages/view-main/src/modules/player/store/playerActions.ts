@@ -6,6 +6,7 @@ import { createPlayMusicInfo, createPlayMusicInfoList } from '@any-listen/common
 import { getRandom } from '@any-listen/common/utils'
 import { checkPicUrl } from '@any-listen/web'
 
+import { showNotify } from '@/components/apis/notify'
 import { appState } from '@/modules/app/store/state'
 import { executeLocalCommand } from '@/modules/command/actions'
 import { addInfo } from '@/modules/dislikeList/actions'
@@ -27,6 +28,7 @@ import * as commit from './commit'
 import { playerEvent } from './event'
 import { setPlayListMusic, setPlayListMusicPlayed, setPlayListMusicUnplayedAll } from './listRemoteAction'
 import { addPlayHistoryList, getMusicLyric, getMusicPic, getMusicUrl, setPlayHistoryList } from './playerRemoteAction'
+import { loadSingerQueue } from './singerQueue'
 import { playerState } from './state'
 
 let gettingUrlId = ''
@@ -354,15 +356,17 @@ export const playMusicCollection = async (
   listId: string,
   musicInfos: AnyListen.Music.MusicInfo[],
   index: number,
-  source: AnyListen.Player.SourceType
+  source: AnyListen.Player.SourceType,
+  singerQueue?: AnyListen.Player.SingerQueue
 ) => {
   if (!musicInfos[index]) return
   const list = createPlayMusicInfoList({ musicInfos, listId, source, playLater: false })
   setPause()
-  await setPlayListMusic({ list, listId: null, source })
+  await setPlayListMusic({ list, listId: null, source, singerQueue })
   commit.setIsLinkedList(false)
   resetRandomNextMusicInfo()
   await setPlayHistoryList([])
+  if (playerState.playList[index]?.itemId !== list[index].itemId) return
   setPlayMusicInfo(list[index], index)
   commit.setPlaying(true)
   handlePlay()
@@ -459,7 +463,38 @@ export const resetRandomNextMusicInfo = () => {
   }
 }
 
+export const prefetchSingerQueue = async () => {
+  if (!playerState.singerQueue) return
+  const [, list] = parsePlayList()
+  const index = list.findIndex(item => item.musicInfo.id === playerState.playInfo.lastTrackId)
+  const random = settingState.setting['player.togglePlayMethod'] === 'random'
+  if (random || list.length - index - 1 <= 3) await loadSingerQueue(random)
+}
+
+const prepareSingerNext = async (manual = false): Promise<boolean> => {
+  const queue = playerState.singerQueue
+  if (!queue) return true
+  const current = playerState.playMusicInfo?.itemId
+  const [later] = parsePlayList()
+  if (later.length > (playerState.playMusicInfo?.playLater ? 1 : 0)) return true
+  const mode = settingState.setting['player.togglePlayMethod']
+  if (!manual && (mode === 'singleLoop' || mode === 'none')) return true
+  if (mode === 'random') await loadSingerQueue(true, manual)
+  else {
+    while (playerState.singerQueue?.queueId === queue.queueId && !playerState.singerQueue.ended) {
+      const [, list] = parsePlayList()
+      const index = list.findIndex(item => item.musicInfo.id === playerState.playInfo.lastTrackId)
+      if (index < list.length - 1) break
+      await loadSingerQueue(false, manual)
+    }
+  }
+  if (playerState.singerQueue?.queueId !== queue.queueId || playerState.playMusicInfo?.itemId !== current) return false
+  if (mode !== settingState.setting['player.togglePlayMethod']) return prepareSingerNext(manual)
+  return true
+}
+
 export const getNextPlayMusicInfo = async (): Promise<AnyListen.Player.PlayMusicInfo | null> => {
+  if (!await prepareSingerNext()) return null
   const [playLaterList, playList] = parsePlayList()
   // 如果稍后播放列表存在歌曲则直接播放该列表的歌曲
   if (playerState.playMusicInfo?.playLater) {
@@ -557,6 +592,16 @@ export const skipNext = async (isAutoSktp = false): Promise<void> => {
   } else if (playerState.isPlayedStop) {
     commit.setPlayedStop(false)
   }
+  const current = playerState.playMusicInfo
+  try {
+    if (!await prepareSingerNext(!isAutoSktp)) return
+  } catch (error) {
+    if (playerState.playMusicInfo !== current) return
+    showNotify((error as Error).message)
+    if (!playerState.playerPlaying) commit.setPlaying(false)
+    return
+  }
+  if (!isAutoSktp && playerState.singerQueue) commit.setPlaying(true)
   const [playLaterList, playList] = parsePlayList()
   // 如果稍后播放列表存在歌曲则直接播放该列表的歌曲
   if (playerState.playMusicInfo?.playLater) {

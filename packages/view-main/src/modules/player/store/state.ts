@@ -1,4 +1,5 @@
 export interface InitState {
+  singerQueue?: AnyListen.Player.SingerQueue
   inited: boolean
   musicInfo: AnyListen.Player.MusicInfo
   playMusicInfo: AnyListen.Player.PlayMusicInfo | null

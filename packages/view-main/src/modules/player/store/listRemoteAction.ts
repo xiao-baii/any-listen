@@ -71,8 +71,17 @@ export const updatePlayListMusicPos = async (data: AnyListen.IPCPlayer.PlayerAct
   await sendPlayListAction({ action: 'posUpdate', data })
 }
 
+export const applySingerPage = (data: AnyListen.IPCPlayer.PlayerActionSingerPage) => {
+  const queue = playerState.singerQueue
+  if (queue?.queueId !== data.queueId || queue.nextPage !== data.page) return
+  playerState.singerQueue = { ...queue, nextPage: data.page + 1, ended: data.ended,
+    startPage: data.complete ? 1 : queue.startPage }
+  commit.addPlayListMusic(-1, data.musics)
+}
+
 export const registerRemoteListAction = () => {
   const set = (info: AnyListen.IPCPlayer.PlayerActionSet) => {
+    playerState.singerQueue = info.singerQueue
     commit.setPlayListMusic(info.list)
     commit.setPlayListId(info.listId, info.source)
   }
@@ -110,6 +119,9 @@ export const registerRemoteListAction = () => {
     switch (action.action) {
       case 'set':
         set(action.data)
+        break
+      case 'singerPage':
+        applySingerPage(action.data)
         break
       case 'add':
         add(action.data)

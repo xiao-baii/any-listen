@@ -1,19 +1,12 @@
-import { databaseState } from '../../context'
-
-const getState = () => databaseState('metadata/playListInfo.ts', () => ({
-  playListInfo: undefined as unknown as PlayListInfo,
-}))
-
 import { dbPrepare } from '../../db'
 
 interface PlayListInfo {
+  singerQueue?: AnyListen.Player.SingerQueue
   listId: null | string
   source: AnyListen.Player.SourceType
 }
 
-const initPlayListInfo = () => {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (getState().playListInfo !== undefined) return
+export const queryMetadataPlayListInfo = (): PlayListInfo => {
   const result = dbPrepare<[], { field_value: string }>(`
     SELECT "field_value"
     FROM "main"."metadata"
@@ -29,35 +22,21 @@ const initPlayListInfo = () => {
         result.source = (result as unknown as { isOnline: boolean }).isOnline ? 'songlist' : 'local'
         delete (result as unknown as { isOnline?: boolean }).isOnline
       }
-      getState().playListInfo = result
-      return
+      return result
     } catch {}
   }
-  getState().playListInfo = {
+  return {
     listId: null,
     source: 'local',
   }
 }
-/**
- * 获取播放列表id
- */
-export const queryMetadataPlayListInfo = () => {
-  initPlayListInfo()
-  return getState().playListInfo
-}
-/**
- * 保存播放列表id
- * @param id
- */
-export const saveMetadataPlayListInfo = (id: string | null, source: AnyListen.Player.SourceType) => {
-  initPlayListInfo()
-  if (getState().playListInfo.listId == id && getState().playListInfo.source === source) return
-  getState().playListInfo.listId = id
-  getState().playListInfo.source = source
-  dbPrepare<string>(
-    `
+export const saveMetadataPlayListInfo = (
+  listId: string | null,
+  source: AnyListen.Player.SourceType,
+  singerQueue?: AnyListen.Player.SingerQueue
+) => {
+  dbPrepare<string>(`
     INSERT INTO "main"."metadata" ("field_name", "field_value")
     VALUES ('play_list_id', ?)
-  `
-  ).run(JSON.stringify(getState().playListInfo))
+  `).run(JSON.stringify({ listId, source, singerQueue }))
 }

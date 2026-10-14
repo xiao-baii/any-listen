@@ -29,6 +29,55 @@ const root = process.env.ACCOUNT_TEST_ROOT!
 const password = 'Test-password-12345'
 const workspace = () => mkdtemp(path.join(tmpdir(), 'any-listen-test-'))
 
+test('draft installation attempts consume tokens on failure and preserve the pending package limit', async () => {
+  const dir = await workspace()
+  const entry = path.join(dir, 'install.worker.mjs')
+  const draft = createDraftExtensions({ entry, directory: path.join(dir, 'draft'),
+    origins: [], mirrors: () => '', locale: () => 'en-us', icon: () => '' })
+  try {
+    const rpcModule = pathToFileURL(createRequire(path.join(root, 'packages/web-server/package.json')).resolve('message2call')).href
+    await writeFile(entry, `
+      import { parentPort } from 'node:worker_threads';
+      import { createMessage2Call } from ${JSON.stringify(rpcModule)};
+      parentPort.once('message', port => {
+        const install = async item => {
+          if (item.id === 'bad') throw new Error('Incompatible engine');
+          return item.id;
+        };
+        const rpc = createMessage2Call({
+          exposeObj: {
+            setExtensionState() {}, loadLocalExtensions() {}, updateGHMirrorHosts() {},
+            downloadAndParseExtension(url) { return { id: url.endsWith('/bad') ? 'bad' : 'good', directory: 'private' }; },
+            installExtension: install, updateExtension: install,
+          },
+          sendMessage: data => port.postMessage(data),
+        });
+        port.on('message', data => rpc.message(data));
+        void rpc.remote.inited();
+      });
+    `)
+    for (const operation of ['installExtension', 'updateExtension']) {
+      for (let attempt = 0; attempt < 9; attempt++) {
+        const item = await draft.call('downloadAndParseExtension', ['https://example.com/bad'])
+        await assert.rejects(draft.call(operation, [item]), /Incompatible engine/)
+        await assert.rejects(draft.call(operation, [item]), /expired/)
+      }
+      const item = await draft.call('downloadAndParseExtension', ['https://example.com/good'])
+      assert.equal(await draft.call(operation, [item]), 'good')
+      await assert.rejects(draft.call(operation, [item]), /expired/)
+    }
+    const staged = []
+    for (let index = 0; index < 8; index++)
+      staged.push(await draft.call('downloadAndParseExtension', ['https://example.com/good']))
+    await assert.rejects(draft.call('downloadAndParseExtension', ['https://example.com/good']), /Too many staged/)
+    assert.equal(await draft.call('installExtension', [staged[0]]), 'good')
+    await draft.call('downloadAndParseExtension', ['https://example.com/good'])
+  } finally {
+    await draft.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('both extension hosts retain worker diagnostics and separate history from live logs', { timeout: 10000 }, async () => {
   const dir = await workspace()
   const entry = path.join(dir, 'diagnostics.worker.mjs')
@@ -267,6 +316,252 @@ test('password creation and rotation accept 1 to 128 characters and reject empty
     }
   } finally {
     accounts.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('deletion markers survive restart, block account changes and commit with the deletion audit', async () => {
+  const dir = await workspace()
+  let accounts = new Accounts(dir)
+  try {
+    const admin = await accounts.create('admin', password, 'admin', null)
+    const user = await accounts.create('alice', password, 'user', admin.id)
+    assert.throws(() => accounts.beginDeletion(admin.id), { status: 409 })
+    assert.throws(() => accounts.beginDeletion(user.id), { status: 409 })
+    assert.throws(() => accounts.beginDeletion('missing'), { status: 404 })
+    const session = await accounts.login(user.username, password, 'ip', 'browser')
+    const resetting = accounts.password(user.id, password + '-new', admin.id)
+    accounts.disable(user.id, true, admin.id)
+    accounts.beginDeletion(user.id)
+    await assert.rejects(resetting, { status: 409 })
+    assert.equal(accounts.session(session.token), null)
+    accounts.close()
+    accounts = new Accounts(dir)
+    assert.equal(accounts.list().find(item => item.id === user.id)!.deleting, true)
+    assert.throws(() => accounts.disable(user.id, false, admin.id), { status: 409 })
+    await assert.rejects(accounts.password(user.id, password, admin.id), { status: 409 })
+    await assert.rejects(accounts.login(user.username, password, 'ip', 'browser'), { status: 401 })
+    accounts.db.exec("CREATE TRIGGER fail_delete BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'Injected delete failure'); END")
+    assert.throws(() => accounts.delete(user.id, admin.id), /Injected delete failure/)
+    assert(accounts.get(user.id))
+    assert.equal(accounts.state(`user.deleting:${user.id}`), 'true')
+    assert.equal(accounts.db.prepare("SELECT count(*) AS count FROM audit WHERE action = 'user.delete'").get().count, 0)
+    accounts.db.exec('DROP TRIGGER fail_delete')
+    accounts.delete(user.id, admin.id)
+    assert.equal(accounts.get(user.id), undefined)
+    assert.equal(accounts.state(`user.deleting:${user.id}`), undefined)
+    assert.equal(accounts.db.prepare("SELECT target FROM audit WHERE action = 'user.delete'").get().target, user.id)
+    const replacement = await accounts.create('ALICE', password, 'user', admin.id)
+    assert.notEqual(replacement.id, user.id)
+    const loginPending = accounts.login(replacement.username, password, 'ip', 'browser')
+    accounts.disable(replacement.id, true, admin.id)
+    accounts.beginDeletion(replacement.id)
+    accounts.delete(replacement.id, admin.id)
+    await assert.rejects(loginPending, { status: 401 })
+  } finally {
+    accounts.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('gateway permanently deletes only disabled ordinary accounts and preserves other runtimes', { timeout: 30000 }, async () => {
+  const dir = await workspace(), accounts = new Accounts(dir)
+  const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
+  const gateway = createGateway(accounts, runtimes, path.join(root, 'build/public'))
+  const sockets: WebSocket[] = []
+  try {
+    const admin = await accounts.create('admin', password, 'admin', null)
+    const alice = await accounts.create('alice', password, 'user', admin.id)
+    const bob = await accounts.create('bobby', password, 'user', admin.id)
+    const adminLogin = await accounts.login(admin.username, password, 'ip', 'browser')
+    const aliceLogin = await accounts.login(alice.username, password, 'ip', 'browser')
+    const bobLogin = await accounts.login(bob.username, password, 'ip', 'browser')
+    gateway.server.listen(0, '127.0.0.1')
+    await once(gateway.server, 'listening')
+    const origin = `http://127.0.0.1:${(gateway.server.address() as { port: number }).port}`
+    const remove = (id: string, token = adminLogin.token, requestOrigin = origin) => fetch(`${origin}/account-api/users/${id}`, {
+      method: 'DELETE', headers: { Cookie: `anylisten_session=${token}`, Origin: requestOrigin },
+    })
+    assert.equal((await remove(alice.id, '')).status, 401)
+    assert.equal((await remove(alice.id, aliceLogin.token)).status, 403)
+    assert.equal((await remove(alice.id, adminLogin.token, 'https://another.example')).status, 403)
+    assert.equal((await remove(admin.id)).status, 409)
+    assert.equal((await remove(alice.id)).status, 409)
+    assert.equal((await remove('missing')).status, 404)
+    for (const login of [aliceLogin, bobLogin]) {
+      const ws = new WebSocket(`${origin.replace('http:', 'ws:')}/u/${login.user.id}/api/ipc?t=main`, {
+        headers: { Cookie: `anylisten_session=${login.token}`, Origin: origin },
+      })
+      sockets.push(ws)
+      await once(ws, 'open')
+    }
+    const aliceData = path.join(dir, 'users', alice.id)
+    const aliceTemp = path.join(runtimes.temporaryRoot, 'users', alice.id)
+    const bobData = path.join(dir, 'users', bob.id, 'app', 'keep.txt')
+    const bobRuntime = runtimes.entries.get(bob.id)
+    await writeFile(path.join(aliceData, 'app', 'private.txt'), 'personal data')
+    await writeFile(path.join(aliceTemp, 'temp', 'private.txt'), 'temporary data')
+    await writeFile(bobData, 'keep other account data')
+    accounts.disable(alice.id, true, admin.id)
+    const closed = once(sockets[0], 'close')
+    assert.equal((await remove(alice.id)).status, 200)
+    await closed
+    assert.equal(accounts.get(alice.id), undefined)
+    assert.equal(accounts.sessions(alice.id).length, 0)
+    assert.equal(runtimes.entries.has(alice.id), false)
+    assert.equal(runtimes.status().errors.some(error => error.userId === alice.id), false)
+    for (const directory of [aliceData, aliceTemp]) await assert.rejects(stat(directory), { code: 'ENOENT' })
+    assert.equal(await readFile(bobData, 'utf8'), 'keep other account data')
+    assert.equal(runtimes.entries.get(bob.id), bobRuntime)
+    assert.equal(sockets[1].readyState, WebSocket.OPEN)
+    assert(accounts.session(bobLogin.token))
+    assert.equal((await remove(alice.id)).status, 404)
+    const replacement = await accounts.create('ALICE', password, 'user', admin.id)
+    assert.notEqual(replacement.id, alice.id)
+    accounts.disable(replacement.id, true, admin.id)
+    assert.equal((await remove(replacement.id)).status, 200, 'accounts without data directories can be deleted')
+  } finally {
+    for (const socket of sockets) socket.terminate()
+    await gateway.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('deletion excludes restore and publication, preserves partial cleanup for an explicit retry', async (t) => {
+  const dir = await workspace(), accounts = new Accounts(dir)
+  const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
+  const gateway = createGateway(accounts, runtimes, dir)
+  const fs = createRequire(__filename)('node:fs/promises') as typeof import('node:fs/promises')
+  let release!: () => void
+  try {
+    const admin = await accounts.create('admin', password, 'admin', null)
+    const alice = await accounts.create('alice', password, 'user', admin.id)
+    const login = await accounts.login(admin.username, password, 'ip', 'browser')
+    accounts.disable(alice.id, true, admin.id)
+    const dataDirectory = path.join(dir, 'users', alice.id)
+    const temporaryDirectory = path.join(runtimes.temporaryRoot, 'users', alice.id)
+    await mkdir(dataDirectory, { recursive: true })
+    await mkdir(temporaryDirectory, { recursive: true })
+    await writeFile(path.join(dataDirectory, 'private.txt'), 'keep on failure')
+    let entered!: () => void
+    const stopping = new Promise<void>(resolve => { entered = resolve })
+    const stopped = new Promise<void>(resolve => { release = resolve })
+    const stop = runtimes.stop.bind(runtimes)
+    t.mock.method(runtimes, 'stop', async (id: string) => {
+      if (id === alice.id) { entered(); await stopped }
+      await stop(id)
+    })
+    const removeDirectory = fs.rm
+    const cleanup = t.mock.method(fs, 'rm', async (target: Parameters<typeof rm>[0], options: Parameters<typeof rm>[1]) => {
+      if (target === dataDirectory) throw new Error('Injected filesystem failure')
+      await removeDirectory(target, options)
+    })
+    const sourceStop = t.mock.method(runtimes.sources, 'stop', async () => {})
+    gateway.server.listen(0, '127.0.0.1')
+    await once(gateway.server, 'listening')
+    const origin = `http://127.0.0.1:${(gateway.server.address() as { port: number }).port}`
+    const api = (url: string, method = 'POST', body?: unknown) => fetch(origin + '/account-api' + url, {
+      method, headers: { Cookie: `anylisten_session=${login.token}`, Origin: origin, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    const deleting = api(`/users/${alice.id}`, 'DELETE')
+    await stopping
+    assert.equal((await api(`/users/${alice.id}/disabled`, 'POST', { disabled: false })).status, 409)
+    assert.equal((await api(`/users/${alice.id}/password`, 'POST', { password })).status, 409)
+    assert.equal((await api(`/users/${alice.id}`, 'DELETE')).status, 409)
+    assert.equal((await api('/publication')).status, 409)
+    assert.equal((await api('/publication/retry')).status, 409)
+    assert.equal(sourceStop.mock.callCount(), 0, 'failed lock acquisition must not roll back or stop public sources')
+    await assert.rejects(runtimes.pauseStarts(), { status: 409 })
+    release()
+    assert.equal((await deleting).status, 500)
+    assert.equal(await readFile(path.join(dataDirectory, 'private.txt'), 'utf8'), 'keep on failure')
+    await assert.rejects(stat(temporaryDirectory), { code: 'ENOENT' })
+    const listed = await (await api('/users', 'GET')).json()
+    assert.equal(listed.users.find((user: { id: string }) => user.id === alice.id).deleting, true)
+    assert.equal(accounts.get(alice.id)!.disabled, 1)
+    cleanup.mock.restore()
+    assert.equal((await api(`/users/${alice.id}`, 'DELETE')).status, 200)
+    assert.equal(accounts.get(alice.id), undefined)
+    await assert.rejects(stat(dataDirectory), { code: 'ENOENT' })
+    await runtimes.pauseStarts()
+    runtimes.resumeStarts()
+  } finally {
+    release?.()
+    t.mock.restoreAll()
+    await gateway.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('deletion rechecks disabled state and administrator session after waiting for starts', async (t) => {
+  const dir = await workspace(), accounts = new Accounts(dir)
+  const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
+  const gateway = createGateway(accounts, runtimes, dir)
+  try {
+    const admin = await accounts.create('admin', password, 'admin', null)
+    const alice = await accounts.create('alice', password, 'user', admin.id)
+    const login = await accounts.login(admin.username, password, 'ip', 'browser')
+    accounts.disable(alice.id, true, admin.id)
+    const pause = runtimes.pauseStarts.bind(runtimes)
+    let revoke = false
+    t.mock.method(runtimes, 'pauseStarts', async () => {
+      await pause()
+      if (revoke) accounts.revoke(login.session.id, admin.id)
+      else accounts.disable(alice.id, false, admin.id)
+    })
+    gateway.server.listen(0, '127.0.0.1')
+    await once(gateway.server, 'listening')
+    const origin = `http://127.0.0.1:${(gateway.server.address() as { port: number }).port}`
+    const remove = () => fetch(`${origin}/account-api/users/${alice.id}`, {
+      method: 'DELETE', headers: { Cookie: `anylisten_session=${login.token}`, Origin: origin },
+    })
+    assert.equal((await remove()).status, 409)
+    assert.equal(accounts.state(`user.deleting:${alice.id}`), undefined)
+    accounts.disable(alice.id, true, admin.id)
+    revoke = true
+    assert.equal((await remove()).status, 401)
+    assert.equal(accounts.state(`user.deleting:${alice.id}`), undefined)
+    assert(accounts.get(alice.id))
+  } finally {
+    await gateway.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a failed runtime close cannot be skipped by retrying permanent deletion', { timeout: 30000 }, async (t) => {
+  const dir = await workspace(), accounts = new Accounts(dir)
+  const runtimes = new Runtimes(dir, path.join(root, 'build/server/index.js'))
+  const gateway = createGateway(accounts, runtimes, dir)
+  try {
+    const admin = await accounts.create('admin', password, 'admin', null)
+    const alice = await accounts.create('alice', password, 'user', admin.id)
+    const login = await accounts.login(admin.username, password, 'ip', 'browser')
+    const runtime = await runtimes.get(alice)
+    const close = runtime.context.close
+    const closeAttempt = t.mock.method(runtime.context, 'close', async () => {
+      await close()
+      throw new Error('Injected close failure')
+    })
+    const privateFile = path.join(dir, 'users', alice.id, 'app', 'private.txt')
+    await writeFile(privateFile, 'must not delete')
+    accounts.disable(alice.id, true, admin.id)
+    gateway.server.listen(0, '127.0.0.1')
+    await once(gateway.server, 'listening')
+    const origin = `http://127.0.0.1:${(gateway.server.address() as { port: number }).port}`
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await fetch(`${origin}/account-api/users/${alice.id}`, {
+        method: 'DELETE', headers: { Cookie: `anylisten_session=${login.token}`, Origin: origin },
+      })
+      assert.equal(response.status, 500)
+      assert.equal(await readFile(privateFile, 'utf8'), 'must not delete')
+    }
+    assert.equal(closeAttempt.mock.callCount(), 1)
+    assert.equal(accounts.list().find(user => user.id === alice.id)!.deleting, true)
+    await gateway.close()
+  } finally {
+    await gateway.close()
+    await rm(runtimes.temporaryRoot, { recursive: true, force: true })
     await rm(dir, { recursive: true, force: true })
   }
 })
@@ -585,6 +880,11 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     const backup = await backupResponse.json()
     backup.songlist.defaultList.name = 'Alice private list'
     assert.equal((await api(prefix, alice.cookie, 'POST', backup)).status, 200)
+    const invalidBackup = structuredClone(backup)
+    invalidBackup.songlist.defaultList.meta.filePath = '/private/music'
+    const rejectedBackup = await api(prefix, alice.cookie, 'POST', invalidBackup)
+    assert.equal(rejectedBackup.status, 400)
+    assert.match(await rejectedBackup.text(), /Unsupported personal data field/)
     const bobBackup = await (await api(`/u/${bob.user.id}/api/account-backup`, bob.cookie)).json()
     assert.notEqual(bobBackup.songlist.defaultList.name, 'Alice private list')
     assert.equal((await (await api(prefix, alice.cookie)).json()).songlist.defaultList.name, 'Alice private list')
@@ -595,7 +895,7 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
       a2Rpc = await rpc(alice, a2Events),
       bRpc = await rpc(bob, bEvents)
     const adminEvents: any[] = []
-    const adminRpc = await rpc(admin, adminEvents)
+    let adminRpc = await rpc(admin, adminEvents)
     const extraClient = await rpc(alice, [])
     const extraSocket = sockets.at(-1)!
     assert(await extraClient.remote.getPlayInfo())
@@ -604,6 +904,9 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     await extraClosed
     assert(await aRpc.remote.getPlayInfo(), 'Closing one connection must preserve sibling connections')
     assert(await bRpc.remote.getPlayInfo(), 'Closing Alice connection must preserve Bob connection')
+    assert.equal(await aRpc.remote.getExtensionErrorMessage(), null)
+    assert.deepEqual(await aRpc.remote.getNewVersionInfo(), {})
+    assert.deepEqual(await aRpc.remote.getResourceList(), { resources: {}, listProvider: [], commands: [] })
     for (const type of ['App', 'ExtensionService', 'ProxyService', 'WebdavSync'] as const) {
       const marker = `admin-log-check-${type}`
       logs[type].logcat.info(marker)
@@ -705,8 +1008,19 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
       assert.equal((await client.remote.getSetting())['network.proxyAllResources'], enabled)
       assert.equal((await client.remote.getSetting())['onlineResource.enable'], onlineResourceEnabled)
       assert.equal((await client.remote.getSetting())['extension.ghMirrorHosts'], ghMirrorHosts)
-      await adminRpc.remote.restartExtensionHost()
+      await assert.rejects(adminRpc.remote.restartExtensionHost(), /Forbidden/)
+      await adminRpc.remote.getExtensionList()
+      const previous = (await runtimes.get(admin.user)).context
+      assert.equal(previous.draftStatus().workers, 1)
+      await runtimes.stop(admin.user.id)
+      assert.equal(previous.draftStatus().workers, 0)
+      adminRpc = await rpc(admin, adminEvents)
+      assert.notEqual((await runtimes.get(admin.user)).context, previous)
+      await adminRpc.remote.getExtensionList()
+      assert.equal((await runtimes.get(admin.user)).context.draftStatus().workers, 1)
       assert.equal((await adminRpc.remote.getSetting())['extension.ghMirrorHosts'], ghMirrorHosts)
+      assert.equal((await adminRpc.remote.getSetting())['network.proxyAllResources'], enabled)
+      assert.equal((await adminRpc.remote.getSetting())['onlineResource.enable'], onlineResourceEnabled)
     }
     for (const method of [
       'executeCommand',
@@ -806,6 +1120,21 @@ test('real gateway: account isolation, backup, RPC authorization, websocket revo
     assert.equal(aQueueEvents.length, 1)
     assert.equal(a2QueueEvents.length, 1)
     assert.equal(bEvents.filter((event: any) => event.data?.list?.[0]?.itemId === 'private-queue').length, 0)
+    const singerQueue = { queueId: 'artist-queue', extensionId: 'ext', source: 'test', singerId: 'artist',
+      startPage: 1, nextPage: 2, limit: 2, ended: false }
+    const first = (await aRpc.remote.getPlayInfo()).list[0]
+    await aRpc.remote.playListAction({ action: 'set', data: { listId: null, source: 'singer', list: [first], singerQueue } })
+    const singerPage = { action: 'singerPage', data: { queueId: singerQueue.queueId, page: 2, ended: true,
+      musics: [{ ...first, itemId: 'singer-next', musicInfo: { ...first.musicInfo, id: 'singer-next' } }] } }
+    const results = await Promise.all([aRpc.remote.playListAction(singerPage), a2Rpc.remote.playListAction(singerPage)])
+    assert.equal(results.filter(Boolean).length, 1)
+    const continued = await a2Rpc.remote.getPlayInfo()
+    assert.equal(continued.list.length, 2)
+    assert.equal(continued.singerQueue.nextPage, 3)
+    assert.equal((await bRpc.remote.getPlayInfo()).singerQueue, undefined)
+    assert.equal((await bRpc.remote.getPlayInfo()).list.length, 0)
+    await assert.rejects(aRpc.remote.playListAction({ ...singerPage, data: { ...singerPage.data, page: 3,
+      musics: [{ ...first, musicInfo: { ...first.musicInfo, isLocal: true } }] } }), /Server file and remote-provider lists cannot be imported/)
     await aRpc.remote.playerEvent({ action: 'playInfoUpdated', data: { index: 0 } })
     await aRpc.remote.playerEvent({ action: 'progress', data: { nowPlayTime: 123 } })
     for (let attempt = 0; attempt < 50 && (await a2Rpc.remote.getPlayInfo()).info.time !== 123; attempt++) await delay(10)
@@ -972,6 +1301,58 @@ test('publication rollback restores switched accounts and releases the maintenan
     const previous = publications.status().version!
     assert.deepEqual(await readdir(snapshots), [previous])
     assert.equal(sourceVersion, previous)
+    const settingsFile = path.join(draft, 'extensions.json')
+    const settings = await readFile(settingsFile, 'utf8')
+    const aliceBefore = await runtimes.get(alice)
+    const bobBefore = await runtimes.get(bob)
+    const adminBefore = await runtimes.get(admin)
+    const sourceStop = runtimes.sources.stop.bind(runtimes.sources)
+    let sourceStops = 0
+    let sourceSwitches = 0
+    runtimes.sources.stop = async () => { sourceStops++; await sourceStop() }
+    runtimes.sources.switch = async version => { sourceSwitches++; sourceVersion = version }
+    await writeFile(settingsFile, JSON.stringify([{ id: '../invalid', enabled: true }]))
+    await assert.rejects(publications.publish(admin), /Invalid extension settings/)
+    assert.equal(runtimes.entries.get(alice.id), aliceBefore)
+    assert.equal(runtimes.entries.get(bob.id), bobBefore)
+    assert.notEqual(runtimes.entries.get(admin.id), adminBefore)
+    assert(runtimes.entries.has(admin.id))
+    assert.equal(sourceStops, 0)
+    assert.equal(sourceSwitches, 0)
+    assert.equal(publications.status().running, false)
+    assert.equal(publications.status().version, previous)
+    assert.equal(accounts.db.prepare("SELECT count(*) AS count FROM audit WHERE action = 'extension.publish.failed'").get<{ count: number }>()!.count, 1)
+    assert.deepEqual(await readdir(snapshots), [previous])
+    await runtimes.pauseStarts()
+    runtimes.resumeStarts()
+
+    runtimes.prepare = async user => {
+      if (user.id === admin.id) throw new Error('Admin recovery failed')
+      await publications.apply()
+    }
+    await assert.rejects(publications.publish(admin), /Invalid extension settings.*Rollback needs retry: admin/)
+    assert.equal(runtimes.entries.get(alice.id), aliceBefore)
+    assert.equal(sourceStops, 0)
+    runtimes.prepare = () => publications.apply()
+    // An administrator that was already stopped is not started by invalid publication.
+    await assert.rejects(publications.publish(admin), /Invalid extension settings/)
+    assert.equal(runtimes.entries.has(admin.id), false)
+    assert.equal(sourceSwitches, 0)
+    await writeFile(settingsFile, settings)
+
+    let stopAttempts = 0
+    runtimes.sources.stop = async () => {
+      if (++stopAttempts <= 2) throw new Error('Injected source shutdown failure')
+      await sourceStop()
+    }
+    await assert.rejects(publications.publish(admin), /Injected source shutdown failure.*public source shutdown/)
+    assert.equal(stopAttempts, 2)
+    assert.equal(sourceSwitches, 1, 'A failure while stopping sources still restores the published version')
+    assert.equal(sourceVersion, previous)
+    assert.notEqual(runtimes.entries.get(alice.id), aliceBefore)
+    assert.equal(publications.status().running, false)
+    assert.deepEqual(await readdir(snapshots), [previous])
+    runtimes.sources.stop = sourceStop
     let failOnce = true
     runtimes.prepare = async (user) => {
       await publications.apply()
@@ -1089,6 +1470,9 @@ test(
       const results = await rpc.remote.musicSearch({ extensionId: 'online-metadata', source: 'test', name: 'Test', page: 1 })
       assert.equal(results.list[0].name, 'Test music')
       const extensions = await rpc.remote.getExtensionList()
+      const resourceList = await rpc.remote.getResourceList()
+      assert.deepEqual(resourceList.commands, [])
+      assert.deepEqual(resourceList.listProvider, [])
       assert(extensions.some((item: any) => item.id === 'lx-api-source-loader' && item.loaded))
       assert(extensions.every((item: any) => !item.directory && !item.dataDirectory && !item.contributes?.settings))
       assert.equal(extensions.find((item: any) => item.id === 'online-metadata').i18nMessages.wyName, 'Test source')

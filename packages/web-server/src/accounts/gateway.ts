@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { rm, stat } from 'node:fs/promises'
 import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import path from 'node:path'
@@ -263,6 +263,24 @@ export const createGateway = (accounts: Accounts, runtimes: Runtimes, publicDir:
           authorize
         )
         json(res, 201, { user: publicUser(user) })
+        return
+      }
+      const deleteMatch = /^\/account-api\/users\/([^/]+)$/.exec(url.pathname)
+      if (deleteMatch && req.method === 'DELETE') {
+        await runtimes.pauseStarts()
+        try {
+          authorize()
+          const user = accounts.beginDeletion(deleteMatch[1])
+          revoke(user.id)
+          await runtimes.stop(user.id)
+          await rm(path.join(runtimes.temporaryRoot, 'users', user.id), { recursive: true, force: true })
+          await rm(path.join(runtimes.root, 'users', user.id), { recursive: true, force: true })
+          accounts.delete(user.id, auth.user.id)
+          runtimes.retry(user.id)
+          json(res, 200, { ok: true })
+        } finally {
+          runtimes.resumeStarts()
+        }
         return
       }
       const userMatch = /^\/account-api\/users\/([^/]+)\/(disabled|password)$/.exec(url.pathname)

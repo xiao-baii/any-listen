@@ -2,12 +2,11 @@ import type Store from '@any-listen/nodejs/Store'
 
 import { createAccountStores } from '@/accounts/stores'
 import { appState } from '@/app/app'
-import { log } from '@/app/shared/log'
 
 let stores: ReturnType<typeof createAccountStores> | undefined
 
 export const getStore = (name: string): Store => {
-  stores ??= createAccountStores(appState.dataPath, log)
+  stores ??= createAccountStores(appState.dataPath)
   return stores.get(name)
 }
 

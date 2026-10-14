@@ -45,6 +45,43 @@ const music = (id, singer = '甲') => ({
   meta: { source: 'fixture', musicId: id, qualitys: {} },
 })
 
+test('singer navigation carries only the name and current or last online source', async () => {
+  const api = await load(`
+    export { toSingerSearch, setLastHistory } from './packages/view-main/src/modules/resource/actions'
+    export { location, calls } from '@/plugins/routes'
+  `, {
+    '@/plugins/routes': `
+      export const location = { location: '/library', query: {} }
+      export const calls = []
+      export const getLocation = () => location
+      export const push = (path, params) => calls.push({ path, params })
+      export const replace = () => {}
+    `,
+    '@/views/Online/shared.svelte': `export const urlParamKeyMap = { type: 't', query: 'q' }`,
+  })
+  const name = '陈奕迅 & Eason'
+  api.toSingerSearch(name)
+  assert.deepEqual(api.calls.pop(), { path: '/online', params: { t: 'search', qt: 'singer', q: name, s: undefined } })
+
+  api.setLastHistory('/online/topSongs', { sid: 'extension_rank', s: 'raw-platform', id: 'old', p: 3 })
+  api.toSingerSearch(name)
+  assert.equal(api.calls.pop().params.s, 'extension_rank')
+
+  api.location.location = '/online'
+  api.location.query = { t: 'songlist', s: 'extension_current', q: 'old', id: 'old', p: 5 }
+  api.toSingerSearch(name)
+  assert.deepEqual(api.calls.pop(), { path: '/online', params: { t: 'search', qt: 'singer', q: name, s: 'extension_current' } })
+
+  api.location.location = '/online/songlist'
+  api.location.query = { sid: 'extension_detail', s: 'raw-platform', id: 'old' }
+  api.toSingerSearch(name)
+  assert.equal(api.calls.pop().params.s, 'extension_detail')
+
+  api.location.location = '/library'
+  api.toSingerSearch(name)
+  assert.equal(api.calls.pop().params.s, 'extension_detail')
+})
+
 test('batch queue removal keeps remaining order and emits the existing events', async () => {
   const api = await load(`
     export { removePlayListMusic } from './packages/view-main/src/modules/player/store/commit'
@@ -154,16 +191,36 @@ test('full singer works load follows provider pagination, deduplicates, and prop
   await assert.rejects(getSingerMusics('ext', 'source', 'fail'), /page failed/)
 })
 
-test('snapshot replaces old queue/history, loops, randomizes, restores and returns to full playlist', async () => {
+async function loadPlayer() {
   const statePath = './packages/view-main/src/modules/player/store/state'
   const commitPath = './packages/view-main/src/modules/player/store/commit'
-  const api = await load(
+  return load(
     `
     export * from './packages/view-main/src/modules/player/store/playerActions'
     export { playerState } from '${statePath}'
+    export { resource } from '@/shared/ipc/resource'
+    export { prefetchSingerQueue } from './packages/view-main/src/modules/player/store/playerActions'
+    export { notices } from '@/components/apis/notify'
     export { settingState } from '@/modules/setting/store/state'
   `,
     {
+      '@/shared/ipc/player/event': 'export const playListActionEvent = { on: () => () => {} }',
+      '@/components/apis/notify': 'export const notices = []; export const showNotify = text => notices.push(text)',
+      '@/shared/ipc/resource': `
+        export const resource = { calls: [], run: async () => { throw new Error('unexpected fetch') } }
+        export const singer = async data => { resource.calls.push(data); return resource.run(data) }
+      `,
+      '@/shared/ipc/player': `
+        import { playerState } from '${statePath}'
+        import { applySingerPage } from './listRemoteAction'
+        export const getPlayInfo = async () => ({ list: playerState.playList, listId: null, source: 'singer', singerQueue: playerState.singerQueue })
+        export const sendPlayListAction = async ({ data }) => {
+          const ids = new Set(playerState.playList.filter(item => !item.playLater).map(item => item.musicInfo.id))
+          const accepted = { ...data, musics: data.musics.filter(item => !ids.has(item.musicInfo.id)) }
+          applySingerPage(accepted)
+          return accepted
+        }
+      `,
       '@any-listen/web': 'export const checkPicUrl = async () => {}',
       '@/modules/command/actions': 'export const executeLocalCommand = () => {}',
       '@/modules/app/store/state': 'export const appState = {}',
@@ -179,7 +236,9 @@ test('snapshot replaces old queue/history, loops, randomizes, restores and retur
       '@/shared': 'export { getRandom } from "./packages/shared/common/utils"; export const parseInterval = () => 0;',
       './listRemoteAction': `
       import * as commit from '${commitPath}'
-      export const setPlayListMusic = async (data) => { commit.setPlayListMusic(data.list); commit.setPlayListId(data.listId, data.source) }
+      import { playerState } from '${statePath}'
+      export { applySingerPage } from './packages/view-main/src/modules/player/store/listRemoteAction'
+      export const setPlayListMusic = async (data) => { playerState.singerQueue = data.singerQueue; commit.setPlayListMusic(data.list); commit.setPlayListId(data.listId, data.source) }
       export const setPlayListMusicPlayed = async (ids) => commit.updatePlayListMusicPlayed(true, ids)
       export const setPlayListMusicUnplayedAll = async () => commit.updatePlayListMusicPlayedAll(false)
     `,
@@ -193,6 +252,10 @@ test('snapshot replaces old queue/history, loops, randomizes, restores and retur
     `,
     }
   )
+}
+
+test('snapshot replaces old queue/history, loops, randomizes, restores and returns to full playlist', async () => {
+  const api = await loadPlayer()
   const { playerState: state, settingState: settings } = api
   const list = [music('a'), music('b'), music('c', '乙')]
   await api.playList('original', list, 0)
@@ -238,4 +301,119 @@ test('snapshot replaces old queue/history, loops, randomizes, restores and retur
   await api.playList('original', list, 0)
   assert.equal(state.playInfo.isLinkedList, true)
   assert.equal(state.playList.length, 3)
+})
+
+const queue = (id = 'queue', page = 1) => ({ queueId: id, extensionId: 'ext', source: 'fixture', singerId: 'artist', startPage: page, nextPage: page + 1, limit: 2, ended: false })
+const page = (list, number, total = 6) => ({ list, page: number, limit: 2, total, info: { id: 'artist', name: 'Artist' } })
+
+test('clicked page needs no fetch; sequential prepares only page one and random still loads all', async () => {
+  const api = await load(`
+    export { prepareSingerPlayback } from './packages/view-main/src/modules/resource/singer'
+    export { calls } from '@/shared/ipc/resource'
+  `, { '@/shared/ipc/resource': `
+    export const calls = []
+    export const singer = async data => {
+      calls.push(data.page)
+      return { page: data.page, limit: 2, total: 4, list: [{ id: String(data.page) }] }
+    }
+  ` })
+  const current = page([music('c'), music('d')], 2)
+  const clicked = await api.prepareSingerPlayback('ext', 'fixture', 'artist', current, 'd')
+  assert.equal(clicked.index, 1)
+  assert.equal(clicked.singerQueue.nextPage, 3)
+  assert.deepEqual(api.calls, [])
+  await api.prepareSingerPlayback('ext', 'fixture', 'artist', current, '', false)
+  assert.deepEqual(api.calls, [1])
+  const random = await api.prepareSingerPlayback('ext', 'fixture', 'artist', current, '', true)
+  assert.equal(random.singerQueue, undefined)
+  assert.deepEqual(api.calls, [1, 1, 2])
+})
+
+test('boundary shares prefetch, continues across pages, deduplicates, and loops only at the end', async () => {
+  const api = await loadPlayer()
+  let resolve
+  api.resource.run = () => new Promise(r => { resolve = r })
+  await api.playMusicCollection('artist', [music('c'), music('d')], 1, 'singer', queue('one', 2))
+  const preload = api.prefetchSingerQueue()
+  const next = api.skipNext(true)
+  assert.equal(api.resource.calls.length, 1)
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'd')
+  resolve(page([music('d'), music('e')], 3))
+  await Promise.all([preload, next])
+  assert.deepEqual(api.playerState.playList.map(item => item.musicInfo.id), ['c', 'd', 'e'])
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'e')
+  await api.skipNext(true)
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'c')
+})
+
+test('failed page preserves queue, does not automatically retry, and manual next retries', async () => {
+  const api = await loadPlayer()
+  await api.playMusicCollection('artist', [music('a')], 0, 'singer', queue())
+  api.resource.run = async () => { throw new Error('page failed') }
+  await assert.rejects(api.prefetchSingerQueue(), /page failed/)
+  await api.skipNext(true)
+  assert.equal(api.resource.calls.length, 1)
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'a')
+  assert.equal(api.playerState.singerQueue.nextPage, 2)
+  api.resource.run = async () => page([music('b')], 2, 3)
+  await api.skipNext()
+  assert.equal(api.resource.calls.length, 2)
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'b')
+  assert.equal(api.playerState.playing, true)
+})
+
+test('random completes earlier pages before selection without replacing current item or progress', async () => {
+  const api = await loadPlayer()
+  await api.playMusicCollection('artist', [music('c')], 0, 'singer', { ...queue('random', 2), ended: true })
+  api.settingState.setting['player.togglePlayMethod'] = 'random'
+  const current = api.playerState.playMusicInfo
+  api.playerState.progress.nowPlayTime = 42
+  api.resource.run = async data => page(data.page === 1 ? [music('a'), music('b')] : [music('c')], data.page, 3)
+  await api.prefetchSingerQueue()
+  assert.equal(api.playerState.playMusicInfo, current)
+  assert.equal(api.playerState.progress.nowPlayTime, 42)
+  assert.deepEqual(api.playerState.playList.map(item => item.musicInfo.id), ['c', 'a', 'b'])
+  assert.equal(api.playerState.singerQueue.startPage, 1)
+  assert.ok(['a', 'b'].includes((await api.getNextPlayMusicInfo()).musicInfo.id))
+})
+
+test('old page completion cannot append or advance playback after a replacement', async () => {
+  const api = await loadPlayer()
+  let resolve
+  api.resource.run = () => new Promise(r => { resolve = r })
+  await api.playMusicCollection('old', [music('a')], 0, 'singer', queue())
+  const pending = api.skipNext(true)
+  await api.playMusicCollection('new', [music('x')], 0, 'singer', queue('new'))
+  resolve(page([music('b')], 2, 3))
+  await pending
+  assert.deepEqual(api.playerState.playList.map(item => item.musicInfo.id), ['x'])
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'x')
+})
+
+
+test('empty terminal page ends pagination and permits looping; restored state can continue', async () => {
+  const api = await loadPlayer()
+  await api.playMusicCollection('artist', [music('a')], 0, 'singer', queue())
+  api.playerState.singerQueue = JSON.parse(JSON.stringify(api.playerState.singerQueue))
+  api.resource.run = async data => page([], data.page, 20)
+  await api.skipNext()
+  assert.equal(api.playerState.singerQueue.ended, true)
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'a')
+  await api.skipNext()
+  assert.equal(api.resource.calls.length, 1)
+})
+
+test('failed full preparation never selects a partial random queue; play-later remains first', async () => {
+  const api = await loadPlayer()
+  await api.playMusicCollection('artist', [music('a'), music('b')], 0, 'singer', queue())
+  api.settingState.setting['player.togglePlayMethod'] = 'random'
+  api.resource.run = async () => { throw new Error('full failed') }
+  await api.skipNext()
+  assert.equal(api.playerState.playMusicInfo.musicInfo.id, 'a')
+  assert.deepEqual(api.notices, ['full failed'])
+  const calls = api.resource.calls.length
+  api.playerState.playList.push({ ...api.playerState.playList[1], itemId: 'later', playLater: true })
+  await api.skipNext()
+  assert.equal(api.playerState.playMusicInfo.itemId, 'later')
+  assert.equal(api.resource.calls.length, calls)
 })

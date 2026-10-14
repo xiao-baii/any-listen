@@ -10,6 +10,8 @@ Status: implemented
 
 删除 ID 和数量限制，按安装列表发布包、配置和标准 storage，保留管理员权限、公共宿主能力边界和回滚。禁用扩展不执行。LX 专用就绪检查仅在启用时执行。
 
+公共图标也不设数量上限，路径与类型校验继续保留，见[多用户错误处理与校验精简](../../implemented/simplification/2026-10-14-account-fallback-cleanup.md)。
+
 独立 singer-metadata 扩展实现五平台 singerSearch / singer，复用现有页面与播放数据契约，手动导入 alix 后发布，不建设商店、预装和自动升级机制。
 
 歌手搜索沿用歌曲、歌单的左侧来源布局，不单独改为窄屏横排。扩展 0.1.1 的来源声明顺序对齐 Online Metadata：酷狗、酷我、网易云、QQ、咪咕；直接调整声明，不增加页面排序规则。

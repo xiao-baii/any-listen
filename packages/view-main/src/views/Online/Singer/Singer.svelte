@@ -5,10 +5,10 @@
   import { getSourceId } from '../shared.svelte'
   import { pushRoute } from '@/modules/resource/actions'
   import { singer } from '@/shared/ipc/resource'
-  import { getSingerMusics } from '@/modules/resource/singer'
+  import { prepareSingerPlayback } from '@/modules/resource/singer'
   import { playMusicCollection } from '@/modules/player/store/playerActions'
   import { updateSetting } from '@/modules/setting/store/action'
-  import { getRandom } from '@/shared'
+  import { showNotify } from '@/components/apis/notify'
   import MusicList from '@/components/common/MusicList/MusicList.svelte'
   import Pagination from '@/components/material/Pagination.svelte'
   import Empty from '@/components/material/Empty.svelte'
@@ -23,6 +23,8 @@
   let error = $state(false)
   let retry = $state(0)
   let request = 0
+  let playRequest = 0
+  let preparingAll = $state(false)
 
   $effect(() => {
     const active = source
@@ -39,27 +41,27 @@
         .catch(() => { if (token === request) error = true })
         .finally(() => { if (token === request) loading = false })
     })
-    return () => { request++ }
+    return () => { request++; playRequest++; preparingAll = false }
   })
 
   const play = async (music: AnyListen.Music.MusicInfo, random?: boolean) => {
     const active = source!
     const singerId = id
     const listId = collectionId
-    const token = ++request
-    loading = true
-    error = false
+    const token = ++playRequest
+    preparingAll = random === true
     try {
-      const list = await getSingerMusics(active.extensionId, active.id, singerId)
-      if (token !== request) return
-      const index = random === true ? getRandom(0, list.length) : random === false ? 0 : list.findIndex((item) => item.id === music.id)
-      if (index < 0 || !list.length) return
+      const { list, index, singerQueue } = await prepareSingerPlayback(
+        active.extensionId, active.id, singerId, result, music.id, random
+      )
+      if (token !== playRequest || index < 0 || !list.length) return
       if (random !== undefined) await updateSetting({ 'player.togglePlayMethod': random ? 'random' : 'listLoop' })
-      await playMusicCollection(listId, list, index, 'singer')
-    } catch {
-      if (token === request) error = true
+      if (token !== playRequest) return
+      await playMusicCollection(listId, list, index, 'singer', singerQueue)
+    } catch (error) {
+      if (token === playRequest) showNotify((error as Error).message)
     } finally {
-      if (token === request) loading = false
+      if (token === playRequest) preparingAll = false
     }
   }
 </script>
@@ -70,13 +72,14 @@
       listinfo={{ id: collectionId, name: result.info.name, pic: result.info.img, type: 'online', listMeta: { extensionId: source.extensionId, source: source.id } }}
       onplaymusic={(music, random) => { void play(music, random) }}
       onreload={() => { retry++ }} />
+    {#if preparingAll}<div role="status">{$t('singer_preparing_all')}</div>{/if}
     <div class="pagination">
       <Pagination count={result.total} page={result.page} limit={result.limit} onclick={(page) => {
         pushRoute('/online', { ...getLocation().query, p: page })
       }} />
     </div>
   {:else}
-    <Btn onclick={() => { pushRoute('/online', { t: 'search', qt: 'singer' }) }}>{$t('singer_search')}</Btn>
+    <Btn onclick={() => { pushRoute('/online', { t: 'search', qt: 'singer', s: $query.s }) }}>{$t('singer_search')}</Btn>
     {#if id}<Empty label={$t('singer_source_unavailable')} />{/if}
   {/if}
 </div>
