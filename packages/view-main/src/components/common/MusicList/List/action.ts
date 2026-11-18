@@ -1,6 +1,7 @@
 import { buildMusicName } from '@any-listen/common/tools'
 
 import { showSimpleConfirmModal } from '@/components/apis/dialog'
+import { showNotify } from '@/components/apis/notify'
 import { addInfo } from '@/modules/dislikeList/actions'
 import { getListMusics, removeListMusics } from '@/modules/musicLibrary/actions'
 import { updateListMusicsPosition } from '@/modules/musicLibrary/store/actions'
@@ -75,12 +76,13 @@ export const playMusicLater = async (
   source: AnyListen.Player.SourceType,
   removeAllSelect?: () => void
 ) => {
-  if (selectedList.length) {
-    await addPlayLaterMusic(selectedList, listId, source)
-    removeAllSelect?.()
-  } else {
-    await addPlayLaterMusic([musicInfo], listId, source)
+  try {
+    await addPlayLaterMusic(selectedList.length ? selectedList : [musicInfo], listId, source)
+  } catch (error) {
+    showNotify(error instanceof Error ? error.message : String(error))
+    return
   }
+  if (selectedList.length) removeAllSelect?.()
 }
 
 export const updateMusicPosition = async (listId: string, position: number, ids: string[]) => {

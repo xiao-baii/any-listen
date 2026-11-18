@@ -886,6 +886,8 @@
   "user_list_music_menu__move_to": "移動到...",
   "user_list_music_menu__play": "播放",
   "user_list_music_menu__play_later": "稍後播放",
+  "user_list_music_menu__play_later_disconnected": "連線已中斷，無法確認是否加入稍後播放",
+  "user_list_music_menu__play_later_unconfirmed": "等待加入稍後播放逾時，請檢查播放佇列",
   "user_list_music_menu__remove": "移除",
   "user_list_music_menu__sort": "調整位置",
   "user_list_music_menu__toggle_source": "更換來源",

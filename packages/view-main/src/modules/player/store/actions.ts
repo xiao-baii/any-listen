@@ -1,6 +1,8 @@
 import { createPlayMusicInfoList } from '@any-listen/common/tools'
 
 import { showMusicCommentModal } from '@/components/apis/musicCommentModal'
+import { onDesconnected } from '@/modules/app/shared'
+import { i18n } from '@/plugins/i18n'
 
 import * as commit from './commit'
 import { playerEvent } from './event'
@@ -82,26 +84,42 @@ export const addPlayLaterMusic = async (
   source: AnyListen.Player.SourceType = 'local',
   isTop = false
 ) => {
+  if (!musicInfos.length) return
   const list = createPlayMusicInfoList({
     musicInfos,
     listId,
     source,
     playLater: true,
   })
-  return new Promise<void>((resolve) => {
-    const unsub = playerEvent.on('playListMusicAdded', (pos, _list) => {
-      if (_list.every((m, i) => list[i].itemId === m.itemId)) {
-        resolve()
-        unsub()
+  let pos = 0
+  if (!isTop) {
+    const firstRegularIndex = playerState.playList.findIndex((m) => !m.playLater)
+    pos = firstRegularIndex === -1 ? playerState.playList.length : firstRegularIndex
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false
+    const finish = (complete: () => void) => {
+      if (settled) return
+      settled = true
+      unsubscribeAdded()
+      unsubscribeDisconnected()
+      clearTimeout(timer)
+      complete()
+    }
+    const fail = (error: unknown) => finish(() => reject(error))
+    const unsubscribeAdded = playerEvent.on('playListMusicAdded', (_pos, added) => {
+      if (added.length === list.length && added.every((music, index) => music.itemId === list[index].itemId)) {
+        finish(resolve)
       }
     })
-    let pos: number
-    if (isTop) pos = 0
-    else {
-      const lastIndex = playerState.playList.findIndex((m) => !m.playLater)
-      pos = lastIndex === -1 ? playerState.playList.length : lastIndex
-    }
-    void addPlayListMusic({ musics: list, pos })
+    const unsubscribeDisconnected = onDesconnected(() => {
+      fail(new Error(i18n.t('user_list_music_menu__play_later_disconnected')))
+    })
+    const timer = setTimeout(() => {
+      fail(new Error(i18n.t('user_list_music_menu__play_later_unconfirmed')))
+    }, 30_000)
+    void addPlayListMusic({ musics: list, pos }).catch(fail)
   })
 }
 

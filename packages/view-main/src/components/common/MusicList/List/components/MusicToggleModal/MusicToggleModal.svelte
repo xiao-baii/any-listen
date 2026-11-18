@@ -11,6 +11,7 @@
   import { addPlayLaterMusic, play, playId, skipNext } from '@/modules/player/store/actions'
   import { addListMusics, getListMusics, removeListMusics, updateListMusicsPosition } from '@/modules/musicLibrary/actions'
   import { showSimpleConfirmModal } from '@/components/apis/dialog'
+  import { showNotify } from '@/components/apis/notify'
   import { playerEvent } from '@/modules/player/store/event'
 
   let {
@@ -147,9 +148,13 @@
   }
 
   const handlePlay = async (music: AnyListen.Music.MusicInfoOnline) => {
-    console.log(music)
+    try {
+      await addPlayLaterMusic([music], `${musicInfo?.name || ''} ${musicInfo?.singer || ''}`.trim(), 'search', true)
+    } catch (error) {
+      showNotify(error instanceof Error ? error.message : String(error))
+      return
+    }
     toggleMusicInfo = music
-    await addPlayLaterMusic([music], `${musicInfo?.name || ''} ${musicInfo?.singer || ''}`.trim(), 'search', true)
     if (playerState.playMusicInfo) void skipNext()
     if (!playerState.playing) play()
   }

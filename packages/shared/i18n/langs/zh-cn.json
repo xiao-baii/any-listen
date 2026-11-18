@@ -884,6 +884,8 @@
   "user_list_music_menu__move_to": "移动到...",
   "user_list_music_menu__play": "播放",
   "user_list_music_menu__play_later": "稍后播放",
+  "user_list_music_menu__play_later_disconnected": "连接已断开，无法确认是否加入稍后播放",
+  "user_list_music_menu__play_later_unconfirmed": "等待加入稍后播放超时，请检查播放队列",
   "user_list_music_menu__remove": "移除",
   "user_list_music_menu__sort": "调整位置",
   "user_list_music_menu__toggle_source": "更换来源",

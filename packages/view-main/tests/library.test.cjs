@@ -1,36 +1,11 @@
 const assert = require('node:assert/strict')
-const { readFileSync } = require('node:fs')
-const { createRequire } = require('node:module')
-const path = require('node:path')
 const { test } = require('node:test')
 const { setImmediate: nextTurn } = require('node:timers/promises')
-const vm = require('node:vm')
-
-const { transformSync } = createRequire(path.resolve(__dirname, '../../shared/scripts/package.json'))('esbuild')
-const ts = createRequire(path.resolve(__dirname, '../../shared/eslint/package.json'))('typescript')
-const readSource = (file) => readFileSync(path.resolve(__dirname, '../src', file), 'utf8')
+const { deferred, load, parseScript, readSource, ts } = require('./helpers.cjs')
 const LIST_IDS = { DEFAULT: 'default', LOVE: 'love', LAST_PLAYED: 'lastPlayed' }
 
-function load(source, modules, globals = {}) {
-  const module = { exports: {} }
-  const { code } = transformSync(source, { loader: 'ts', format: 'cjs' })
-  const context = Object.defineProperties(
-    { module, require: (name) => modules[name] ?? {} },
-    Object.getOwnPropertyDescriptors(globals)
-  )
-  vm.runInNewContext(code, context)
-  return module.exports
-}
-
-function deferred() {
-  let resolve, reject
-  const promise = new Promise((res, rej) => { resolve = res; reject = rej })
-  return { promise, resolve, reject }
-}
-
 function viewFixture({ readPrevious = async () => null, tick = async () => {} } = {}) {
-  const script = readSource('views/Library/index.svelte').match(/<script[^>]*>([\s\S]*?)<\/script>/)[1]
-  const parsed = ts.createSourceFile('Library.ts', script, ts.ScriptTarget.Latest, true)
+  const parsed = parseScript('views/Library/index.svelte')
   const effects = parsed.statements.filter((node) => ts.isExpressionStatement(node) &&
     ts.isCallExpression(node.expression) && node.expression.expression.getText(parsed) === '$effect')
   const guard = parsed.statements.find((node) => ts.isVariableStatement(node) &&
