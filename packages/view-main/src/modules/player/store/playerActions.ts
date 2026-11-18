@@ -331,6 +331,16 @@ const handlePlayList = async (
     commit.setIsLinkedList(true)
     targetPlayMusicInfo = newList.find((m) => m.musicInfo.id == targetMusicInfo.id)
     setPlayMusicInfo(targetPlayMusicInfo!, index)
+  } else if (isClianHistory) {
+    // 清理已播放的音乐列表
+    if (playerState.playList[0]?.playLater) {
+      const idx = playerState.playList.findIndex((m) => !m.playLater)
+      await setPlayListMusic({
+        list: playerState.playList.slice(idx),
+        listId: playerState.playInfo.listId,
+        source: playerState.playInfo.source,
+      })
+    }
   }
   commit.setPlaying(true)
   handlePlay()
@@ -670,9 +680,14 @@ export const skipNext = async (isAutoSktp = false): Promise<void> => {
         togglePlayMethod = 'listLoop'
     }
   }
-  let nextIndex = playerState.playInfo.lastTrackId
-    ? playList.findIndex((m) => m.musicInfo.id == playerState.playInfo.lastTrackId)
-    : -1
+  let nextIndex: number
+  if (playerState.playInfo.lastTrackId) {
+    nextIndex = playList.findIndex((m) => m.musicInfo.id == playerState.playInfo.lastTrackId)
+    if (nextIndex < 0) {
+      nextIndex = playerState.playInfo.index
+      if (togglePlayMethod == 'listLoop' || togglePlayMethod == 'list') nextIndex -= 1
+    }
+  } else nextIndex = -1
   switch (togglePlayMethod) {
     case 'listLoop':
       nextIndex = nextIndex == playList.length - 1 ? 0 : nextIndex + 1

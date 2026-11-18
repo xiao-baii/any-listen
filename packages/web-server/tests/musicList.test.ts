@@ -126,6 +126,10 @@ const database = (name: string) => {
       covers++
       return ids.map(() => [music(name)])
     },
+    async createUserLists(_position: number, items: AnyListen.List.OnlineListInfo[]) {
+      list = structuredClone(items[0])
+      tracks = []
+    },
     async updateUserLists(items: AnyListen.List.OnlineListInfo[]) {
       list = structuredClone(items[0])
     },
@@ -138,7 +142,8 @@ const database = (name: string) => {
   return { service, writes, covers: () => covers, tracks: () => tracks, list: () => list }
 }
 
-test('playlist instances isolate events, identical IDs, cover caches and deferred scroll saves', async () => {
+test('playlist instances isolate events, identical IDs, cover caches and deferred scroll saves', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
   const aDb = database('a'),
     bDb = database('b')
   let aScroll: Record<string, number> = {},
@@ -184,7 +189,7 @@ test('playlist instances isolate events, identical IDs, cover caches and deferre
     assert.equal((await b.getListsCover(['same'], picture)).same, 'b')
     await a.sendMusicListAction({ action: 'list_music_overwrite', data: { listId: 'same', musicInfos: [music('new-a')] } })
     await nextTurn()
-    assert.equal(seenA.length, 2)
+    assert.equal(seenA.length, 1)
     assert.equal(seenB.length, 0)
     assert.equal(bDb.writes.length, 0)
     await a.getListsCover(
@@ -226,6 +231,43 @@ test('playlist close drains writes accepted before closure and retries failed sc
   fail = false
   await list.close()
   assert.deepEqual(saved, { same: 42 })
+})
+
+test('closing a playlist service waits for its count read and cancels subsequent notifications', async (t) => {
+  const db = database('a')
+  let reads = 0
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  t.mock.method(db.service, 'getListInfos', async () => {
+    reads++
+    await gate
+    return [db.list()]
+  })
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const lists = createMusicList(db.service, async () => ({}), async () => {})
+  const events: string[] = []
+  lists.onMusicListAction(async (action) => { events.push(action.action) })
+  const overwrite: AnyListen.IPCList.ActionList = { action: 'list_music_overwrite', data: { listId: 'same', musicInfos: [] } }
+  try {
+    await lists.sendMusicListAction(overwrite)
+    t.mock.timers.tick(500)
+    await lists.sendMusicListAction(overwrite)
+    t.mock.timers.tick(1000)
+    await nextTurn()
+    assert.equal(reads, 1)
+    let closed = false
+    const closing = lists.close().then(() => { closed = true })
+    await nextTurn()
+    assert.equal(closed, false)
+    release()
+    await closing
+    t.mock.timers.tick(1000)
+    assert.equal(reads, 1)
+    assert.deepEqual(events, ['list_music_overwrite', 'list_music_overwrite'])
+  } finally {
+    release()
+    await lists.close()
+  }
 })
 
 test('online sync isolates tenants, removes trailing songs and persists sync time', async () => {
@@ -351,7 +393,7 @@ test('resource proxy instances isolate keys and cached files and cancel only the
 })
 
 
-test('automatic sync defaults off, respects edits and leaves manual sync available', async () => {
+test('collecting a remote playlist fetches once, with automatic sync off by default', async () => {
   let current = { id: 'online', type: 'online', meta: {} } as AnyListen.List.OnlineListInfo
   let calls = 0
   let fail = false
@@ -373,8 +415,16 @@ test('automatic sync defaults off, respects edits and leaves manual sync availab
     handlers.get('list_create')!(0, [current])
     await nextTurn()
     assert.equal(calls, 0)
-    await sync.syncList(current)
+    Object.assign(current.meta, { extensionId: 'public', source: 'test', syncId: 'remote', autoSync: false })
+    handlers.get('list_create')!(0, [current], true)
+    await nextTurn()
+    assert.equal(calls, 0)
+    handlers.get('list_create')!(0, [current], false)
+    await nextTurn()
     assert.equal(calls, 1)
+    assert.equal(current.meta.autoSync, false)
+    assert.equal(current.meta.songCount, 1)
+    assert.ok(current.meta.syncTime > 0)
     current.meta.autoSync = true
     handlers.get('list_update')!([current], false, false)
     await nextTurn()
@@ -389,6 +439,34 @@ test('automatic sync defaults off, respects edits and leaves manual sync availab
   } finally { await sync.close() }
 })
 
+test('a failed initial fetch leaves the online list available for a manual retry', async () => {
+  const db = database('initial')
+  const lists = createMusicList(db.service, async () => ({}), async () => {})
+  const online = db.list()
+  online.meta.autoSync = false
+  const errors: unknown[] = []
+  let calls = 0
+  const sync = createOnlineListSync(lists, async () => {
+    if (++calls === 1) throw new Error('source failed')
+    return [music('recovered')]
+  }, (list) => db.service.updateUserLists([list]), (error) => { errors.push(error) })
+  try {
+    await lists.musicListEvent.list_create(0, [online])
+    await nextTurn()
+    assert.equal(calls, 1)
+    assert.match(String(errors[0]), /source failed/)
+    assert.deepEqual(db.list(), online)
+    assert.deepEqual(db.tracks(), [])
+    assert.equal(db.writes.length, 0)
+    await sync.syncList(online)
+    assert.deepEqual(db.tracks().map((item) => item.id), ['recovered'])
+    assert.equal(db.list().meta.autoSync, false)
+  } finally {
+    await sync.close()
+    await lists.close()
+  }
+})
+
 test('turning automatic sync off cancels queued and in-flight automatic results', async () => {
   const items = ['first', 'queued'].map(id => ({ id, type: 'online', meta: { autoSync: true } })) as AnyListen.List.OnlineListInfo[]
   let release!: () => void
@@ -399,11 +477,11 @@ test('turning automatic sync off cancels queued and in-flight automatic results'
     getAllUserLists: async () => ({ userList: structuredClone(items) }),
     getListMusics: async () => [],
     sendMusicListAction: async (action: unknown) => { writes.push(action) },
-    musicListEvent: { on: (name: string, callback: (...args: any[]) => void) => { if (name === 'list_create') schedule = callback; return () => {} } },
+    musicListEvent: { on: (name: string, callback: (...args: any[]) => void) => { if (name === 'list_update') schedule = callback; return () => {} } },
   } as unknown as Parameters<typeof createOnlineListSync>[0]
   const sync = createOnlineListSync(lists, async item => { calls.push(item.id); await barrier; return [music('new')] }, async () => {}, () => {})
   try {
-    schedule(0, items)
+    schedule(items, false, false)
     await nextTurn()
     items.forEach(item => { item.meta.autoSync = false })
     release()

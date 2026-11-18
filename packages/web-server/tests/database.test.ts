@@ -4,19 +4,21 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
+import { setImmediate as nextTurn } from 'node:timers/promises'
 import type { Worker } from 'node:worker_threads'
 
+import { createMusicList } from '../../shared/app/modules/musicList/service'
 import { DatabaseContext, databaseState, getManagedDatabaseContexts } from '../../shared/app/modules/worker/dbService/context'
 import { trimMusicListCache } from '../../shared/app/modules/worker/dbService/modules/music_library'
 import { createAccountDatabase } from '../../shared/app/modules/worker/dbService/service'
 import { LIST_IDS } from '../../shared/common/constants'
 import { SharedDatabase } from '../src/accounts/sharedDatabase'
 
-const openTestDatabase = async () => {
+const openTestDatabase = async (machineId = 'regression') => {
   const root = await mkdtemp(path.join(tmpdir(), 'any-listen-list-regression-'))
   const require = createRequire(path.join(process.env.ACCOUNT_TEST_ROOT!, 'packages/shared/app/package.json'))
   const binding = require(path.join(path.dirname(require.resolve('better-sqlite3')), 'binding.js')).getPrebuildPath()
-  const open = () => createAccountDatabase(root, binding, 'regression')
+  const open = () => createAccountDatabase(root, binding, machineId)
   const db = await open()
   const context = [...getManagedDatabaseContexts()].at(-1)!
   return { root, open, db, context }
@@ -24,6 +26,53 @@ const openTestDatabase = async () => {
 
 const song = (id: string, name = id) =>
   ({ id, name, singer: 'artist', isLocal: false, interval: null, meta: {} }) as AnyListen.Music.MusicInfo
+
+test('batched counts reflect adds, removals and moves in each account database', { timeout: 5000 }, async (t) => {
+  const setup = async (account: string) => {
+    const { db, root } = await openTestDatabase(account)
+    const lists = createMusicList(db.service as unknown as Parameters<typeof createMusicList>[0], async () => ({}), async () => {})
+    t.after(async () => {
+      await lists.close()
+      db.close()
+      await rm(root, { recursive: true, force: true })
+    })
+    const notifications: Array<Record<string, number>> = []
+    let notify!: () => void
+    const notified = new Promise<void>((resolve) => { notify = resolve })
+    lists.onMusicListAction(async (action) => {
+      if (action.action === 'list_update' && action.data.sync) {
+        notifications.push(Object.fromEntries(action.data.lists.map((list) => [list.id, list.meta.songCount])))
+        notify()
+      }
+    })
+    return { db, lists, notifications, notified }
+  }
+  const a = await setup('account-a')
+  const b = await setup('account-b')
+  const source = LIST_IDS.DEFAULT
+  const target = LIST_IDS.LOVE
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  for (const [account, prefix] of [[a, 'a'], [b, 'b']] as const) {
+    await account.lists.sendMusicListAction({ action: 'list_music_add', data: {
+      id: source, musicInfos: [1, 2, 3].map((i) => song(`${prefix}-${i}`)), addMusicLocationType: 'bottom',
+    } })
+    await account.lists.sendMusicListAction({ action: 'list_music_remove', data: { listId: source, ids: [`${prefix}-1`] } })
+  }
+  await a.lists.sendMusicListAction({ action: 'list_music_move', data: {
+    fromId: source, toId: target, musicInfos: [song('a-2')], addMusicLocationType: 'bottom',
+  } })
+  assert.deepEqual(a.db.service.getListMusics(source).map((item) => item.id), ['a-3'])
+  assert.deepEqual(a.db.service.getListMusics(target).map((item) => item.id), ['a-2'])
+  assert.deepEqual(b.db.service.getListMusics(source).map((item) => item.id), ['b-2', 'b-3'])
+  t.mock.timers.tick(499)
+  assert.deepEqual(a.notifications, [])
+  assert.deepEqual(b.notifications, [])
+  t.mock.timers.tick(1)
+  await Promise.all([a.notified, b.notified])
+  await nextTurn()
+  assert.deepEqual(a.notifications, [{ [source]: 1, [target]: 1 }])
+  assert.deepEqual(b.notifications, [{ [source]: 2 }])
+})
 
 test('queue updates persist only selected item ids and do not change memory when SQL fails', async () => {
   const fixture = await openTestDatabase()

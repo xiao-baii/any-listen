@@ -1,6 +1,6 @@
 {
   "name": "web-server",
-  "version": "0.12.0-beta.1",
+  "version": "0.12.1-beta.4",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/any-listen/any-listen-web-server.git"
@@ -18,13 +18,13 @@
     "@any-listen/theme": "workspace:@shared/theme@*",
     "@any-listen/web": "workspace:@shared/web@*",
     "@koa/cors": "^5.0.0",
-    "@koa/router": "^15.7.0",
+    "@koa/router": "^15.7.1",
     "better-sqlite3": "^13.0.3",
     "jsonwebtoken": "^9.0.3",
-    "koa": "^3.2.1",
+    "koa": "^3.3.0",
     "log4js": "6.9.1",
     "message2call": "^2.0.3",
-    "ws": "^8.22.0"
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@any-listen/eslint": "workspace:@shared/eslint@*",
@@ -33,6 +33,6 @@
     "@types/koa": "^3.0.3",
     "@types/koa__cors": "^5.0.1",
     "@types/ws": "8.5.4",
-    "vite": "^8.3.3"
+    "vite": "^8.3.6"
   }
 }

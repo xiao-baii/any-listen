@@ -126,8 +126,13 @@ export const createOnlineListSync = (
     }
   }
   subscriptions.push(
-    lists.musicListEvent.on('list_create', async (_position, items) => {
-      schedule(items)
+    lists.musicListEvent.on('list_create', async (_position, items, isRemote) => {
+      if (closed || isRemote) return
+      for (const list of items) {
+        if (list.type !== 'online') continue
+        const { extensionId, source, syncId } = list.meta
+        if (extensionId && source && syncId) void syncList(list).catch(onError)
+      }
     })
   )
   subscriptions.push(

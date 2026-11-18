@@ -1,25 +1,39 @@
 <!--- @lang: en-us -->
 
-### Added
+### Improved
 
-- Added a **Follow System Light/Dark Mode** option for the tray icon under _Settings > Other Settings_. When enabled, the icon color follows the system's light or dark mode.
-- Added a **Save as Regular Playlist** button to song lists in the Online Resources section. Selecting it creates a regular playlist and adds the songs to it.
-- Added an **Automatic Sync** option to online list settings. Disabled by default.
+- The app now automatically selects the last-selected playlist on startup ([#401](https://github.com/any-listen/any-listen/issues/401)).
+- Improved the click interaction for items in the dropdown under the top search box ([#415](https://github.com/any-listen/any-listen/issues/415)).
+
+### Fixed
+
+- Fixed an issue where using the keyboard shortcut to open Search unexpectedly activated list multi-selection mode.
+- Fixed an issue with checking the availability of local playlist paths.
+- Fixed an issue where the song count shown in playlist lists could differ from the actual count.
+- Fixed an issue where deleting the currently selected playlist could cause the UI to freeze ([#417](https://github.com/any-listen/any-listen/issues/417)).
+- Fixed an issue where songs could not be read when local file names contained `?` ([#420](https://github.com/any-listen/any-listen/issues/420)).
 
 ### Changed
 
-- Online lists no longer sync remote lists automatically by default, including previously created lists. To enable automatic syncing for a list, turn it on in that list's settings.
+- Desktop lyrics now use **Multi-line Lyrics** mode by default.
 
 ---
 
 <!--- @lang: zh-cn -->
 
-### 新增
+### 优化
 
-- 新增 **「跟随系统亮暗模式」** 选项，位于 _设置 > 其他设置_。启用后，托盘图标颜色会随系统亮暗模式切换。
-- 在线资源板块的歌曲列表中新增 **「收藏为普通列表」** 按钮，点击后会创建一个普通列表，并将当前列表中的歌曲添加到该列表。
-- 在线列表设置新增 **「自动同步」** 选项，默认关闭。
+- 程序启动时自动选中上次选中的歌单（[#401](https://github.com/any-listen/any-listen/issues/401)）。
+- 优化顶部搜索框下拉列表项的点击交互体验（[#415](https://github.com/any-listen/any-listen/issues/415)）。
+
+### 修复
+
+- 修复使用快捷键打开搜索时意外进入列表多选模式的问题。
+- 修复本地列表路径可用性检查异常的问题。
+- 修复歌单列表中显示的歌曲数量可能与实际数量不一致的问题。
+- 修复删除当前选中的列表时可能导致 UI 卡死的问题（[#417](https://github.com/any-listen/any-listen/issues/417)）。
+- 修复本地文件名包含 `?` 时歌曲无法读取的问题（[#420](https://github.com/any-listen/any-listen/issues/420)）。
 
 ### 变更
 
-- 新创建的在线列表和已有在线列表默认不再自动同步远程列表。如需自动同步某个列表，可在该列表的设置中启用。
+- 桌面歌词默认使用 **「多行歌词」** 模式。

@@ -60,10 +60,10 @@ const defaultSetting: AnyListen.AppSetting = {
   'player.ignoreLocalLyrics': false,
 
   'playDetail.isZoomActiveLrc': true,
-  'playDetail.style.fontSize': 100,
+  'playDetail.style.fontSize': 80,
   'playDetail.style.align': 'left',
-  'playDetail.style.fontWeight': true,
-  'playDetail.isDelayScroll': true,
+  'playDetail.style.fontWeight': false,
+  'playDetail.isDelayScroll': false,
   'playDetail.isDynamicBackground': true,
   'playDetail.coverStyle': 'cd',
 
@@ -79,7 +79,7 @@ const defaultSetting: AnyListen.AppSetting = {
   'desktopLyric.pauseHide': true,
   'desktopLyric.isLockScreen': true,
   'desktopLyric.isHoverHide': false,
-  'desktopLyric.mode': 'classic',
+  'desktopLyric.mode': 'multiLine',
 
   'desktopLyric.classic.x': null,
   'desktopLyric.classic.y': null,

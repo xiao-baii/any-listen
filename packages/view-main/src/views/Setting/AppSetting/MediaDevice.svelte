@@ -65,14 +65,14 @@
             <Btn
               min
               onclick={async () => {
-                if (await requestMediaDevicePermission()) {
-                  void getMediaDevices().then((devices) => {
-                    deviceList = devices
-                  })
-                } else {
-                  showNotify(i18n.t('settings.player.media_device_get_permission_failed'))
+                try {
+                  await requestMediaDevicePermission()
+                  deviceList = await getMediaDevices()
+                } catch (err) {
+                  showNotify(i18n.t('settings.player.media_device_get_permission_failed', { msg: (err as Error).message }))
+                } finally {
+                  hasDevicePermission = getHasMediaDevicePermission()
                 }
-                hasDevicePermission = getHasMediaDevicePermission()
               }}>{$t('settings.player.media_device_get_permission')}</Btn
             >
           </div>

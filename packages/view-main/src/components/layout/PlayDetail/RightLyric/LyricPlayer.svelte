@@ -118,7 +118,9 @@
         overflow-wrap: anywhere;
       }
       .line-content {
-        padding: calc(var(--play-detail-lrc-font-size, 16px) / 1.8) 8% calc(var(--play-detail-lrc-font-size, 16px) / 1.8) 1px;
+        // Ignore formatting for the following padding rule
+        // prettier-ignore
+        padding: calc(var(--play-detail-lrc-font-size, 16px) / 1.8) 8% calc(var(--play-detail-lrc-font-size, 16px) / 1.8) 1Px;
         line-height: 1.2;
         color: @unplay-color;
         overflow-wrap: break-word;
@@ -126,14 +128,14 @@
           0 0 2px var(--color-primary-light-100-alpha-900),
           0 0 3px var(--color-primary-light-100-alpha-900),
           0 0 4px var(--color-primary-dark-700-alpha-900);
-        transition: @transition-slow !important;
+        transition: 0.6s linear !important;
         transition-property: padding, transform !important;
 
-        &.active {
-          // padding: var(--play-detail-lrc-font-size, 16px) 1px;
-          padding-top: calc(var(--play-detail-lrc-font-size, 16px) * 1.2);
-          padding-bottom: calc(var(--play-detail-lrc-font-size, 16px) * 1.2);
-        }
+        // &.active {
+        //   // padding: var(--play-detail-lrc-font-size, 16px) 1px;
+        //   padding-top: calc(var(--play-detail-lrc-font-size, 16px) * 1.2);
+        //   padding-bottom: calc(var(--play-detail-lrc-font-size, 16px) * 1.2);
+        // }
 
         .extended {
           margin-top: 5px;
@@ -199,6 +201,8 @@
     :global {
       .line-content {
         &.active {
+          padding-top: calc(var(--play-detail-lrc-font-size, 16px) * 1.3);
+          padding-bottom: calc(var(--play-detail-lrc-font-size, 16px) * 1.3);
           transform: scale(1.1);
           // .extended {
           //   // font-size: 1em;

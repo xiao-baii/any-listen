@@ -1,21 +1,23 @@
 <!--- @lang: en-us -->
 
-### Added
+### Improved
 
-- Added a **Save as Regular Playlist** button to song lists in the Online Resources section. Selecting it creates a regular playlist and adds the songs to it.
+- Improved the click interaction for items in the dropdown under the top search box ([#415](https://github.com/any-listen/any-listen/issues/415)).
 
 ### Fixed
 
-- Fixed an issue where the **Automatic Sync** option in online list settings could not be saved.
+- Fixed an issue where songs could not be read when local file names contained `?` ([#420](https://github.com/any-listen/any-listen/issues/420)).
+- Fixed an issue where frontend assets might not be updated on the first visit after an update.
 
 ---
 
 <!--- @lang: zh-cn -->
 
-### 新增
+### 优化
 
-- 在线资源板块的歌曲列表中新增 **「收藏为普通列表」** 按钮，点击后会创建一个普通列表，并将当前列表中的歌曲添加到该列表。
+- 优化顶部搜索框下拉列表项的点击交互体验（[#415](https://github.com/any-listen/any-listen/issues/415)）。
 
 ### 修复
 
-- 修复在线列表设置中的 **「自动同步」** 选项无法保存的问题。
+- 修复本地文件名包含 `?` 时歌曲无法读取的问题（[#420](https://github.com/any-listen/any-listen/issues/420)）。
+- 修复更新后首次访问时前端资源可能未更新的问题。

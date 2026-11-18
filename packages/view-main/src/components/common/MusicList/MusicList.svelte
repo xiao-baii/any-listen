@@ -8,6 +8,7 @@
   import List from './List/index.svelte'
   import type { ListInfo } from './type'
   import { updateSetting } from '@/modules/setting/store/action'
+  import { settingState } from '@/modules/setting/store/state'
   import { getRandom } from '@/shared'
   import { untrack, type ComponentExports } from 'svelte'
   import MiniHeader from './MiniHeader.svelte'
@@ -51,12 +52,21 @@
   const handlePlay = async (music: AnyListen.Music.MusicInfo, random = false, fromHeader = false) => {
     if (!music || loading || error) return
     if (onplaymusic) { onplaymusic(music, fromHeader ? random : undefined); return }
-    if (singer) {
-      if (fromHeader) await updateSetting({ 'player.togglePlayMethod': random ? 'random' : 'listLoop' })
-      await playMusicCollection(listinfo.id, visibleList, visibleList.findIndex((m) => m.id === music.id), source)
+    const filtered = Boolean(singer)
+    const songs = visibleList
+    const info = listinfo
+    const listSource = source
+    if (fromHeader) {
+      const method = settingState.setting['player.togglePlayMethod']
+      const next = random ? 'random' : 'listLoop'
+      if (method !== next && (random || filtered || method === 'singleLoop' || method === 'none')) {
+        await updateSetting({ 'player.togglePlayMethod': next })
+      }
+    }
+    if (filtered) {
+      await playMusicCollection(info.id, songs, songs.findIndex((m) => m.id === music.id), listSource)
     } else {
-      if (random) await updateSetting({ 'player.togglePlayMethod': 'random' })
-      await playMusic(listinfo.id, list, music, source, getListMetaInfo(listinfo), fromHeader)
+      await playMusic(info.id, songs, music, listSource, getListMetaInfo(info), fromHeader)
     }
   }
   let multimode = $state(false)

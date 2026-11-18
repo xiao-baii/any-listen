@@ -6,6 +6,7 @@ import timers from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { gunzip, gzip } from 'node:zlib'
 
+import { isUrl } from '@any-listen/common/common'
 import { CONFIG_FILE_EXT, NATIVE_VERSION } from '@any-listen/common/constants'
 
 // 重命名 process 防止 vite 转换
@@ -13,7 +14,7 @@ export const nodeProcess = process
 
 export const joinPath = (...paths: string[]): string => path.join(...paths)
 
-export const extname = (p: string): string => path.extname(p.split('?')[0]).toLowerCase()
+export const extname = (p: string): string => path.extname(isUrl(p) ? p.split('?')[0] : p).toLowerCase()
 export const extnameRaw = (p: string): string => path.extname(p)
 export const basename = (p: string, ext?: string): string => path.basename(p, ext)
 export const dirname = (p: string): string => path.dirname(p)
@@ -30,9 +31,15 @@ export const encodePath = (path: string) => pathToFileURL(path).href
  * @param path 路径
  * @param read 只检查读取
  */
+export const checkPathWithError = async (path: string, read = false) =>
+  fs.promises.access(path, read ? fs.constants.R_OK : fs.constants.R_OK | fs.constants.W_OK)
+/**
+ * 检查路径是否存在
+ * @param path 路径
+ * @param read 只检查读取
+ */
 export const checkPath = async (path: string, read = false) =>
-  fs.promises
-    .access(path, read ? fs.constants.R_OK : fs.constants.R_OK | fs.constants.W_OK)
+  checkPathWithError(path, read)
     .then(() => true)
     .catch(() => false)
 

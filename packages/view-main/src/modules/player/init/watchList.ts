@@ -69,7 +69,7 @@ const throttleListChangeSync = throttle(async () => {
 
   const musicMap = new Map<string, AnyListen.Player.PlayMusicInfo>()
   const newList = playerState.playList.filter((m) => {
-    musicMap.set(m.itemId, m)
+    if (!m.playLater) musicMap.set(m.itemId, m)
     return m.playLater
   })
   const curSyncId = syncId
@@ -261,7 +261,7 @@ export const initWatchList = () => {
       unregistered.add(musicLibraryEvent.on('listMusicUpdated', handleListInfoUpdateSync))
       unregistered.add(
         musicLibraryEvent.on('listMusicRemovedBefore', (listId, musicIds) => {
-          if (!playerState.playMusicInfo) return
+          if (!playerState.playMusicInfo || !playerState.playInfo.isLinkedList) return
           const targetListId = playerState.playMusicInfo.listId
           if (listId != targetListId || !musicIds.includes(playerState.playMusicInfo.musicInfo.id)) return
           console.log('current music removed by listMusicRemovedBefore')

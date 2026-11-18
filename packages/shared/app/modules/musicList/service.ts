@@ -155,15 +155,34 @@ export const createMusicList = (
     scheduleScrollSave()
   }
 
-  const updateSongCount = async (listIds: string[]) => {
-    let updatedLists: AnyListen.List.MyListInfo[] = []
-    const targetLists = await dbService.getListInfos(listIds)
-    for (const targetList of targetLists) {
-      if (targetList) updatedLists.push(targetList)
+  const songCountIds = new Set<string>()
+  let songCountTimer: ReturnType<typeof setTimeout> | undefined
+  let songCountTask: Promise<void> | undefined
+  const refreshSongCounts = async () => {
+    const ids = Array.from(songCountIds)
+    songCountIds.clear()
+    const lists = (await dbService.getListInfos(ids)).filter(
+      (list): list is AnyListen.List.MyListInfo => list != null && !songCountIds.has(list.id)
+    )
+    if (!closed && lists.length) {
+      await musicListEvent.listAction({ action: 'list_update', data: { lists, sync: true } })
     }
-    if (updatedLists.length) {
-      await musicListEvent.listAction({ action: 'list_update', data: { lists: updatedLists, sync: true } })
-    }
+  }
+  const scheduleSongCounts = () => {
+    if (closed || !songCountIds.size || songCountTimer || songCountTask) return
+    songCountTimer = setTimeout(() => {
+      songCountTimer = undefined
+      songCountTask = refreshSongCounts().catch(onError).finally(() => {
+        songCountTask = undefined
+        scheduleSongCounts()
+      })
+    }, 500)
+    songCountTimer.unref?.()
+  }
+  const queueSongCounts = (ids: string[]) => {
+    if (closed) return
+    for (const id of ids) songCountIds.add(id)
+    scheduleSongCounts()
   }
   const sendMusicListAction = async (action: AnyListen.IPCList.ActionList) => {
     validateAction?.(action)
@@ -171,23 +190,23 @@ export const createMusicList = (
     clearListCoverCache()
     switch (action.action) {
       case 'list_music_overwrite':
-        await updateSongCount([action.data.listId])
+        queueSongCounts([action.data.listId])
         break
       case 'list_music_add':
-        await updateSongCount([action.data.id])
+        queueSongCounts([action.data.id])
         break
       case 'list_music_move':
-        await updateSongCount([action.data.toId, action.data.fromId])
+        queueSongCounts([action.data.toId, action.data.fromId])
         break
       case 'list_music_remove':
-        await updateSongCount([action.data.listId])
+        queueSongCounts([action.data.listId])
         break
       case 'list_music_clear':
-        await updateSongCount(action.data)
+        queueSongCounts(action.data)
         break
       case 'list_data_overwrite': {
         const ids = [LIST_IDS.DEFAULT, LIST_IDS.LOVE, ...action.data.userList.map((l) => l.id)]
-        await updateSongCount(ids)
+        queueSongCounts(ids)
         await overrideListScrollInfo(ids)
         break
       }
@@ -233,7 +252,9 @@ export const createMusicList = (
       closed = true
       event.listeners.clear()
       clearTimeout(scrollTimer)
-      const results = await Promise.allSettled(pending)
+      clearTimeout(songCountTimer)
+      songCountIds.clear()
+      const results = await Promise.allSettled([...pending, songCountTask])
       try {
         await flushScroll()
       } finally {
