@@ -33,7 +33,7 @@ jobs:
       - run: npm run verify-notes
       - run: node --test scripts/ghcr-release.test.cjs
       - run: npm run test:singer
-      - run: node --test packages/view-main/tests/media-device.test.cjs
+      - run: node --test packages/view-main/tests/*.test.cjs
       - run: npm run test:singer-extension
       - run: npm run build:singer-extension
       - run: pnpm -F @shared/eslint exec tsc -p ../../web-server/tsconfig.accounts.json

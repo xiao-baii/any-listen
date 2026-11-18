@@ -1,3 +1,5 @@
+import { onConnected } from '@/modules/app/shared'
+
 import { ipc } from '../ipc'
 
 export const getAllList: AnyListen.IPC.ServerIPC['getAllUserLists'] = async () => {
@@ -20,15 +22,19 @@ export const sendListAction: AnyListen.IPC.ServerIPC['listAction'] = async (acti
   return ipc.listAction(action)
 }
 
-let lastId: string | null = null
-export const getListPrevSelectId: AnyListen.IPC.ServerIPC['getListPrevSelectId'] = async () => {
-  lastId = await ipc.getListPrevSelectId()
-  return lastId
-}
+let selectionWrites = { confirmedId: null as string | null, tail: Promise.resolve() }
+onConnected(() => { selectionWrites = { confirmedId: null, tail: Promise.resolve() } })
+
+export const getListPrevSelectId: AnyListen.IPC.ServerIPC['getListPrevSelectId'] = async () => ipc.getListPrevSelectId()
 export const saveListPrevSelectId: AnyListen.IPC.ServerIPC['saveListPrevSelectId'] = async (id) => {
-  if (lastId === id) return
-  lastId = id
-  await ipc.saveListPrevSelectId(id)
+  const connection = selectionWrites
+  const task = connection.tail.then(async () => {
+    if (connection !== selectionWrites || connection.confirmedId === id) return
+    await ipc.saveListPrevSelectId(id)
+    connection.confirmedId = id
+  })
+  connection.tail = task.catch(() => {})
+  return task
 }
 export const getListScrollPosition: AnyListen.IPC.ServerIPC['getListScrollPosition'] = async () => {
   return ipc.getListScrollPosition()

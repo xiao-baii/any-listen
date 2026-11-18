@@ -1,6 +1,7 @@
 <script lang="ts">
   import MusicList from '@/components/common/MusicList/MusicList.svelte'
-  import { query, replace } from '@/plugins/routes'
+  import { getLocation, location, query, replace } from '@/plugins/routes'
+  import { onConnected } from '@/modules/app/shared'
   import { getListMusics } from '@/modules/musicLibrary/actions'
   import { musicLibraryEvent } from '@/modules/musicLibrary/store/event'
   import type { ListInfo } from '@/components/common/MusicList/type'
@@ -91,67 +92,96 @@
   const targetListInfo = $derived(getTargetActiveListInfo($userListsAll, $query.id))
   const listCover = $derived(useListCover(targetListInfo))
   const listInfo = $derived(buildActiveListInfo($resourceList, targetListInfo, listCover.val))
+  const selectionExists = $derived($userListInited && !!targetListInfo)
+
+  const isCurrentRoute = (route: string, id: string, mid: string) => {
+    const current = getLocation()
+    return current.location === route && current.query.id === id && current.query.mid === mid
+  }
 
   let currentId = ''
+  let currentLocation = ''
+  let scrollReady = false
   const handleScroll = (pos: number) => {
-    if (!currentId) return
+    if (!scrollReady || $location !== currentLocation || $query.id !== currentId) return
     void saveListScrollPosition(currentId, pos)
   }
 
   $effect(() => {
-    const id = $query.id
-    if (id != currentId) {
+    const route = $location
+    const { id, mid } = $query
+    currentLocation = route
+    if (!selectionExists || id !== currentId) {
       currentId = id
-      untrack(() => {
-        const musicId = $query.mid
-        if (!id) return
-        void Promise.all([getListMusics(id), getListScrollPosition(id)]).then(([_list, pos]) => {
-          list = _list
-          void tick().then(() => {
-            let idx = -1
-            if (musicId) {
-              idx = _list.findIndex((m) => m.id == musicId)
-              void replace(`/library?id=${id}`)
-            }
-            if (idx < 0) {
-              musicList?.setScrollPosition(pos)
-            } else {
-              musicList?.setScrollIndex(idx)
-            }
-          })
-        })
-      })
+      scrollReady = false
+      list = []
     }
+    if (!selectionExists) return
+
+    let active = true
+    let request = 0
+    let restoreScroll = !scrollReady || !!mid
+    if (restoreScroll) scrollReady = false
+    const isCurrent = (version: number) => active && request === version &&
+      isCurrentRoute(route, id, mid) && $userListInited && userListExist(id)
+    const load = () => {
+      const version = ++request
+      const position = restoreScroll ? getListScrollPosition(id).catch(() => 0) : 0
+      void Promise.all([getListMusics(id), position]).then(async ([songs, pos]) => {
+        if (!isCurrent(version)) return
+        list = [...songs]
+        if (!restoreScroll) return
+
+        await tick()
+        if (!isCurrent(version)) return
+        const index = mid ? songs.findIndex((music) => music.id === mid) : -1
+        if (index < 0) musicList?.setScrollPosition(pos)
+        else musicList?.setScrollIndex(index)
+        restoreScroll = false
+        scrollReady = true
+        if (mid) await replace(`/library?id=${id}`)
+      }).catch((error: unknown) => console.warn('Failed to load playlist view', error))
+    }
+    if (restoreScroll) untrack(load)
     const unsub = musicLibraryEvent.on('listMusicChanged', (ids) => {
-      if (!ids.includes(id) || !userListExist(id)) return
-      void getListMusics(id).then((_list) => {
-        list = [..._list]
-      })
+      if (ids.includes(id) && userListExist(id)) load()
     })
     const unsub2 = musicLibraryEvent.on('listMusicUpdated', (updateInfo) => {
-      if (!updateInfo.has(id) || !userListExist(id)) return
-      void getListMusics(id).then((_list) => {
-        list = [..._list]
-      })
+      if (updateInfo.has(id) && userListExist(id)) load()
     })
 
     return () => {
+      active = false
       unsub()
       unsub2()
     }
   })
 
   $effect(() => {
-    const id = $query.id
+    const route = $location
+    const { id, mid } = $query
     if (!$userListInited) return
-    if (id && $userListsAll.some((l) => l.id == id)) {
-      void saveListPrevSelectId(id)
-    } else {
-      void getListPrevSelectId().then((prevId) => {
-        if (!prevId || $userListsAll.every((l) => l.id != prevId)) prevId = LIST_IDS.LOVE
-        void replace(`/library?id=${prevId}`)
-      })
+    let active = true
+    const isCurrent = () => active && isCurrentRoute(route, id, mid) && $userListInited
+    if (selectionExists) {
+      const save = () => {
+        if (!isCurrent() || !userListExist(id)) return
+        void saveListPrevSelectId(id).catch((error: unknown) => console.warn('Failed to save playlist selection', error))
+      }
+      untrack(save)
+      const unsubscribe = onConnected(save)
+      return () => {
+        active = false
+        unsubscribe()
+      }
     }
+
+    void getListPrevSelectId().catch(() => null).then((prevId) => {
+      if (!isCurrent() || userListExist(id)) return
+      const target = prevId && userListExist(prevId) ? prevId : LIST_IDS.LOVE
+      return replace(`/library?id=${target}`)
+    }).catch((error: unknown) => console.warn('Failed to restore playlist selection', error))
+    return () => { active = false }
   })
 </script>
 

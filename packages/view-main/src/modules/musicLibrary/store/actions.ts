@@ -265,7 +265,7 @@ export const getListMusics = async (listId: string | null, forceUpdate = false):
     showNotify(i18n.t('lists__music_load_failed', { err: err.message }))
     throw err
   })
-  return commit.setMusicList(listId, list)
+  return commit.userListExist(listId) ? commit.setMusicList(listId, list) : list
 }
 
 /**

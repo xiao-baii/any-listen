@@ -123,19 +123,6 @@ const updateList = ({ name, id, meta }: AnyListen.List.MyListInfo) => {
     }
   }
 }
-const getAllSubListIds = (id: NonNullable<AnyListen.List.UserListInfo['parentId']>) => {
-  const queue = getSubUserLists(id).map((l) => l.id)
-  const ids = [...queue]
-  while (queue.length) {
-    getSubUserLists(queue.shift()!).forEach((l) => {
-      const id = l.id
-      ids.push(id)
-      queue.push(id)
-    })
-  }
-  return ids
-}
-
 export const listDataOverwrite = ({ defaultList, loveList, userList }: AnyListen.List.ListDataFull) => {
   musicLibraryState.allMusicList.clear()
 
@@ -169,15 +156,18 @@ export const userListCreate = (info: AnyListen.List.UserListInfo, position: numb
 export const userListsRemove = (ids: string[]) => {
   const changedListIds: string[] = []
   const changedSubListIds = new Set<AnyListen.List.ParentId>()
-  const subIds = ids.map((id) => getAllSubListIds(id)).flat()
-  const allIds = [...ids, ...subIds]
+  const allIds = new Set(ids)
+  for (const id of allIds) {
+    for (const child of musicLibraryState.userListsMap.get(id) ?? []) allIds.add(child.id)
+  }
   for (const id of allIds) {
     const index = musicLibraryState.userLists.findIndex((l) => l.id == id)
     if (index < 0) continue
     const info = musicLibraryState.userLists.splice(index, 1)[0]
     musicLibraryState.userListsMap.delete(id)
-    const list = musicLibraryState.userListsMap.get(info.parentId)!
-    list.splice(list.indexOf(info), 1)
+    const siblings = musicLibraryState.userListsMap.get(info.parentId)
+    const position = siblings?.indexOf(info) ?? -1
+    if (position >= 0) siblings?.splice(position, 1)
     changedSubListIds.add(info.parentId)
     changedSubListIds.add(id)
     changedListIds.push(id)
