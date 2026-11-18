@@ -198,6 +198,10 @@ export class Event extends _Event {
    */
   async list_music_overwrite(listId: string, musicInfos: AnyListen.Music.MusicInfo[], isRemote = false) {
     await this.database.musicOverwrite(listId, musicInfos)
+    this.notifyMusicOverwrite(listId, musicInfos, isRemote)
+  }
+
+  notifyMusicOverwrite(listId: string, musicInfos: AnyListen.Music.MusicInfo[], isRemote = false) {
     this.emitEvent('list_music_overwrite', listId, musicInfos, isRemote)
     this.list_music_changed([listId])
     this.list_changed()

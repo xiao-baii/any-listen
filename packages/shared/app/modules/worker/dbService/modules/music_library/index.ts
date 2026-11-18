@@ -1,4 +1,7 @@
+import { isDeepStrictEqual } from 'node:util'
+
 import { databaseState, getDatabaseContext, getManagedDatabaseContexts } from '../../context'
+import { getDB } from '../../db'
 
 export const trimMusicListCache = () => {
   if (!getDatabaseContext().managed) return
@@ -445,6 +448,50 @@ export const musicOverwrite = (listId: string, musicInfos: AnyListen.Music.Music
     arrPush(targetList, musicInfos)
     updateSongCount(listId, musicInfos.length)
   }
+}
+
+export const commitOnlineListSync = (
+  snapshot: AnyListen.List.OnlineListInfo,
+  online: AnyListen.Music.MusicInfoOnline[],
+  automatic: boolean
+) => {
+  const db = getDB()
+  const id = snapshot.id
+  const result = db.transaction(() => {
+    const row = db.prepare<[string], QueryUserListInfo>(`
+      SELECT list.*, (SELECT COUNT(*) FROM main.my_list_music_info WHERE list_id = list.id) AS song_count
+      FROM main.my_list AS list
+      WHERE list.id = ?
+    `).get(id)
+    if (row?.type !== 'online') return { status: 'missing' } as const
+    const meta = { ...(JSON.parse(row.meta) as AnyListen.List.OnlineListInfo['meta']), songCount: row.song_count }
+    if (
+      row.name !== snapshot.name || row.parent_id !== snapshot.parentId ||
+      (automatic && meta.autoSync !== true) || !isDeepStrictEqual(meta, JSON.parse(JSON.stringify(snapshot.meta)))
+    ) {
+      return { status: 'stale' } as const
+    }
+
+    const local = queryMusicInfoByListId(id).map(fromDBMusicInfo)
+    let musicInfos: AnyListen.Music.MusicInfo[] | undefined
+    if (local.length !== online.length || online.some((music, index) => local[index]?.id !== music.id)) {
+      const known = new Map(local.map((music) => [music.id, music]))
+      musicInfos = online.map((music) => known.get(music.id) ?? music)
+      overwriteMusicInfo(id, toDBMusicInfo(musicInfos, id))
+    }
+
+    const updatedMeta = { ...meta, songCount: online.length, syncTime: Date.now() }
+    db.prepare('UPDATE main.my_list SET meta = ? WHERE id = ?').run(JSON.stringify(updatedMeta), id)
+    return { status: 'applied', list: { ...snapshot, meta: updatedMeta }, musicInfos } as const
+  })()
+
+  if (result.status === 'applied') {
+    const state = getState()
+    const index = state.userLists.findIndex((list) => list.id === id)
+    if (index >= 0) state.userLists[index] = result.list
+    if (result.musicInfos) state.musicLists.delete(id)
+  }
+  return result
 }
 
 /**

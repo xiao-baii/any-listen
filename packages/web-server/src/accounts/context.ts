@@ -166,7 +166,7 @@ export const createAccountContext = async (options: {
     if (list.meta.sourceType === 'songlist') return resources.songlistDetailAll(list.meta.extensionId, list.meta.source, list.meta.syncId)
     if (list.meta.sourceType === 'topSongs') return resources.topSongsDetailAll(list.meta.extensionId, list.meta.source, list.meta.syncId, String(list.meta.date ?? ''))
     throw new Error('Unsupported online list source')
-  }, async list => { await database.updateUserLists([list]) }, error => logger.error('[List sync] Failed', error))
+  }, error => logger.error('[List sync] Failed', error))
   const player = createPlayerModule(state, appEvent, database, lists.musicListEvent, lists.sendMusicListAction, true)
   const server = http.createServer()
   const close = async () => {

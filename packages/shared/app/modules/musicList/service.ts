@@ -217,6 +217,25 @@ export const createMusicList = (
     }
   }
 
+  const commitOnlineListSync = async (
+    snapshot: AnyListen.List.OnlineListInfo,
+    songs: AnyListen.Music.MusicInfoOnline[],
+    automatic: boolean
+  ) => {
+    const listId = snapshot.id
+    validateAction?.({ action: 'list_music_overwrite', data: { listId, musicInfos: songs } })
+    const result = await dbService.commitOnlineListSync(snapshot, songs, automatic)
+    if (result.status !== 'applied' || closed) return result
+
+    if (result.musicInfos) {
+      clearListCoverCache(listId)
+      event.notifyMusicOverwrite(listId, result.musicInfos)
+      event.emitEvent('listAction', { action: 'list_music_overwrite', data: { listId, musicInfos: result.musicInfos } })
+    }
+    await musicListEvent.listAction({ action: 'list_update', data: { lists: [result.list], sync: true } })
+    return result
+  }
+
   const updateMusicPic = async (listId: string, musicInfo: AnyListen.Music.MusicInfo) => {
     await musicListEvent.list_music_update_pic(listId, musicInfo)
     clearListCoverCache(listId)
@@ -243,6 +262,7 @@ export const createMusicList = (
     getListScrollInfo: track(getListScrollInfo),
     saveListScrollPosition: track(saveListScrollPosition),
     sendMusicListAction: track(sendMusicListAction),
+    commitOnlineListSync: track(commitOnlineListSync),
     updateMusicPic: track(updateMusicPic),
     updateMusicBaseInfo: track(updateMusicBaseInfo),
     clearListCoverCache,

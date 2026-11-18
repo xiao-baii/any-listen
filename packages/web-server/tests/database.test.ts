@@ -27,6 +27,74 @@ const openTestDatabase = async (machineId = 'regression') => {
 const song = (id: string, name = id) =>
   ({ id, name, singer: 'artist', isLocal: false, interval: null, meta: {} }) as AnyListen.Music.MusicInfo
 
+test('online list commits guard newer edits and roll back music when metadata write fails', async (t) => {
+  const fixture = await openTestDatabase()
+  let db = fixture.db
+  const playlist: AnyListen.List.OnlineListInfo = {
+    id: 'online', name: 'Original', type: 'online', parentId: null,
+    meta: {
+      extensionId: 'fixture', source: 'fixture', syncId: 'remote', sourceType: 'songlist', autoSync: true, syncTime: 0,
+      createTime: 1, updateTime: 0, playCount: 0, posTime: 0, songCount: 0, pic: '', desc: '',
+    },
+  }
+  const current = () => structuredClone(db.service.getUserListById(playlist.id)) as AnyListen.List.OnlineListInfo
+  const songs = [song('new'), song('keep')] as AnyListen.Music.MusicInfoOnline[]
+  const tracks = () => db.service.getListMusics(playlist.id).map(({ id, name }) => [id, name])
+  try {
+    db.service.createUserLists(0, [playlist])
+    db.service.musicOverwrite(playlist.id, [song('keep', 'Local title'), song('old')])
+    const before = current()
+    db.service.updateUserLists([{ ...before, name: 'Renamed during sync' }])
+    assert.equal(db.service.commitOnlineListSync(before, songs, false).status, 'stale')
+    const renamed = current()
+    db.service.updateUserLists([{ ...renamed, meta: { ...renamed.meta, autoSync: false } }])
+    assert.equal(db.service.commitOnlineListSync(renamed, songs, true).status, 'stale')
+    const edited = current()
+    assert.equal(db.service.commitOnlineListSync(edited, songs, true).status, 'stale')
+
+    const move = fixture.context.db!.prepare('UPDATE main.my_list SET parent_id = ? WHERE id = ?')
+    move.run('another-parent', playlist.id)
+    assert.deepEqual(current(), edited)
+    assert.equal(db.service.commitOnlineListSync(edited, songs, false).status, 'stale')
+    move.run(null, playlist.id)
+
+    fixture.context.db!.exec(`CREATE TEMP TRIGGER fail_sync_meta BEFORE UPDATE OF meta ON my_list BEGIN SELECT RAISE(ABORT, 'sync metadata failure'); END`)
+    assert.throws(() => db.service.commitOnlineListSync(edited, songs, false), /sync metadata failure/)
+    assert.deepEqual(tracks(), [['keep', 'Local title'], ['old', 'old']])
+    assert.deepEqual(current(), edited)
+    db.close()
+    db = await fixture.open()
+    assert.deepEqual(current(), edited)
+    assert.deepEqual(tracks(), [['keep', 'Local title'], ['old', 'old']])
+
+    let time = 200
+    t.mock.method(Date, 'now', () => time)
+    const reopened = [...getManagedDatabaseContexts()].at(-1)!.db!
+    reopened.prepare('UPDATE main.my_list_music_info SET name = ? WHERE list_id = ? AND id = ?')
+      .run('New local title', playlist.id, 'keep')
+    const result = db.service.commitOnlineListSync(edited, songs, false)
+    assert.equal(result.status, 'applied')
+    assert.deepEqual(tracks(), [['new', 'new'], ['keep', 'New local title']])
+    assert.deepEqual(current(), { ...edited, meta: { ...edited.meta, syncTime: 200, songCount: 2 } })
+    time = 300
+    const unchanged = db.service.commitOnlineListSync(current(), songs, false)
+    assert.equal(unchanged.status, 'applied')
+    if (unchanged.status === 'applied') assert.equal(unchanged.musicInfos, undefined)
+    db.close()
+    db = await fixture.open()
+    assert.equal(current().meta.syncTime, 300)
+    assert.deepEqual(tracks(), [['new', 'new'], ['keep', 'New local title']])
+
+    const removed = current()
+    db.service.removeUserLists([playlist.id])
+    assert.equal(db.service.commitOnlineListSync(removed, songs, false).status, 'missing')
+    assert.deepEqual(tracks(), [])
+  } finally {
+    db.close()
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
 test('batched counts reflect adds, removals and moves in each account database', { timeout: 5000 }, async (t) => {
   const setup = async (account: string) => {
     const { db, root } = await openTestDatabase(account)

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { setImmediate as nextTurn } from 'node:timers/promises'
+import { isDeepStrictEqual } from 'node:util'
 
 import WebSocket from 'ws'
 
@@ -137,6 +138,17 @@ const database = (name: string) => {
       await nextTurn()
       tracks = structuredClone(items)
       writes.push([id, items])
+    },
+    async commitOnlineListSync(snapshot: AnyListen.List.OnlineListInfo, items: AnyListen.Music.MusicInfoOnline[], automatic: boolean) {
+      if (!isDeepStrictEqual(list, snapshot) || (automatic && !list.meta.autoSync)) return { status: 'stale' }
+      let musicInfos: typeof tracks | undefined
+      if (tracks.length !== items.length || items.some((item, index) => item.id !== tracks[index]?.id)) {
+        musicInfos = items
+        tracks = structuredClone(items)
+        writes.push([list.id, items])
+      }
+      list = { ...list, meta: { ...list.meta, songCount: tracks.length, syncTime: Date.now() } }
+      return { status: 'applied', list: structuredClone(list), musicInfos }
     },
   } as unknown as DBSeriveTypes
   return { service, writes, covers: () => covers, tracks: () => tracks, list: () => list }
@@ -284,20 +296,16 @@ test('online sync isolates tenants, removes trailing songs and persists sync tim
     async () => {}
   )
   const errors: unknown[] = []
+  const aEvents: string[] = []
+  a.onMusicListAction(async (action) => { aEvents.push(action.action) })
   const aSync = createOnlineListSync(
     a,
     async () => [music('a')],
-    async (list) => {
-      await aDb.service.updateUserLists([list])
-    },
     (error) => errors.push(error)
   )
   const bSync = createOnlineListSync(
     b,
     async () => [music('b')],
-    async (list) => {
-      await bDb.service.updateUserLists([list])
-    },
     (error) => errors.push(error)
   )
   try {
@@ -316,7 +324,9 @@ test('online sync isolates tenants, removes trailing songs and persists sync tim
     assert.equal(aDb.list().meta.songCount, 1)
     assert.ok(bDb.list().meta.syncTime)
     assert.equal(aDb.writes.length, 1)
+    assert.deepEqual(aEvents, ['list_music_overwrite', 'list_update', 'list_update'])
     assert.deepEqual(errors, [])
+    await assert.rejects(aSync.syncList({ ...aDb.list(), id: 'removed' }), /Not an online list/)
     aSync.start()
     await aSync.close()
     await assert.rejects(aSync.syncList(aDb.list()), /closed/)
@@ -346,11 +356,11 @@ test('online sync close waits for in-flight resolution without writing stale res
       await barrier
       return []
     },
-    async () => {},
     () => {}
   )
   const task = sync.syncList(db.list())
   assert.equal(sync.syncList(db.list()), task)
+  const rejected = assert.rejects(task, /Online list sync is closed/)
   await nextTurn()
   let closed = false
   const closing = sync.close().then(() => {
@@ -359,7 +369,7 @@ test('online sync close waits for in-flight resolution without writing stale res
   await nextTurn()
   assert.equal(closed, false)
   release()
-  await Promise.all([task, closing])
+  await Promise.all([rejected, closing])
   assert.equal(calls, 1)
   assert.equal(db.writes.length, 0)
   await list.close()
@@ -394,48 +404,49 @@ test('resource proxy instances isolate keys and cached files and cancel only the
 
 
 test('collecting a remote playlist fetches once, with automatic sync off by default', async () => {
-  let current = { id: 'online', type: 'online', meta: {} } as AnyListen.List.OnlineListInfo
+  const db = database('initial')
+  const current = () => db.list()
+  const initial = { ...current(), meta: { ...current().meta, extensionId: '', autoSync: false } }
+  await db.service.updateUserLists([initial])
   let calls = 0
   let fail = false
-  let writes = 0
   const handlers = new Map<string, (...args: any[]) => void>()
   const lists = {
-    getAllUserLists: async () => ({ userList: [structuredClone(current)] }),
-    getListMusics: async () => [music('old')],
-    sendMusicListAction: async (action: { action: string }) => { if (action.action === 'list_music_overwrite') writes++ },
+    getAllUserLists: db.service.getAllUserLists,
+    commitOnlineListSync: db.service.commitOnlineListSync,
     musicListEvent: { on: (name: string, callback: (...args: any[]) => void) => { handlers.set(name, callback); return () => handlers.delete(name) } },
   } as unknown as Parameters<typeof createOnlineListSync>[0]
   const sync = createOnlineListSync(lists, async () => {
     calls++
     if (fail) throw new Error('source failed')
     return [music('new')]
-  }, async item => { current = item }, () => {})
+  }, () => {})
   try {
     await sync.syncAllList()
-    handlers.get('list_create')!(0, [current])
+    handlers.get('list_create')!(0, [current()])
     await nextTurn()
     assert.equal(calls, 0)
-    Object.assign(current.meta, { extensionId: 'public', source: 'test', syncId: 'remote', autoSync: false })
-    handlers.get('list_create')!(0, [current], true)
+    current().meta.extensionId = 'public'
+    handlers.get('list_create')!(0, [current()], true)
     await nextTurn()
     assert.equal(calls, 0)
-    handlers.get('list_create')!(0, [current], false)
+    handlers.get('list_create')!(0, [current()], false)
     await nextTurn()
     assert.equal(calls, 1)
-    assert.equal(current.meta.autoSync, false)
-    assert.equal(current.meta.songCount, 1)
-    assert.ok(current.meta.syncTime > 0)
-    current.meta.autoSync = true
-    handlers.get('list_update')!([current], false, false)
+    assert.equal(current().meta.autoSync, false)
+    assert.equal(current().meta.songCount, 1)
+    assert.ok(current().meta.syncTime > 0)
+    current().meta.autoSync = true
+    handlers.get('list_update')!([current()], false, false)
     await nextTurn()
     assert.equal(calls, 2)
-    current.meta.autoSync = false
+    current().meta.autoSync = false
     await sync.syncAllList()
     assert.equal(calls, 2)
     fail = true
-    const before = writes
-    await assert.rejects(sync.syncList(current), /source failed/)
-    assert.equal(writes, before)
+    const before = db.writes.length
+    await assert.rejects(sync.syncList(current()), /source failed/)
+    assert.equal(db.writes.length, before)
   } finally { await sync.close() }
 })
 
@@ -449,7 +460,7 @@ test('a failed initial fetch leaves the online list available for a manual retry
   const sync = createOnlineListSync(lists, async () => {
     if (++calls === 1) throw new Error('source failed')
     return [music('recovered')]
-  }, (list) => db.service.updateUserLists([list]), (error) => { errors.push(error) })
+  }, (error) => { errors.push(error) })
   try {
     await lists.musicListEvent.list_create(0, [online])
     await nextTurn()
@@ -471,15 +482,19 @@ test('turning automatic sync off cancels queued and in-flight automatic results'
   const items = ['first', 'queued'].map(id => ({ id, type: 'online', meta: { autoSync: true } })) as AnyListen.List.OnlineListInfo[]
   let release!: () => void
   const barrier = new Promise<void>(resolve => { release = resolve })
-  const calls: string[] = [], writes: unknown[] = []
+  const calls: string[] = []
+  const commits: string[] = []
   let schedule!: (...args: any[]) => void
   const lists = {
     getAllUserLists: async () => ({ userList: structuredClone(items) }),
-    getListMusics: async () => [],
-    sendMusicListAction: async (action: unknown) => { writes.push(action) },
+    commitOnlineListSync: async (snapshot: AnyListen.List.OnlineListInfo) => {
+      assert.equal(snapshot.meta.autoSync, true)
+      commits.push(snapshot.id)
+      return { status: 'stale' }
+    },
     musicListEvent: { on: (name: string, callback: (...args: any[]) => void) => { if (name === 'list_update') schedule = callback; return () => {} } },
   } as unknown as Parameters<typeof createOnlineListSync>[0]
-  const sync = createOnlineListSync(lists, async item => { calls.push(item.id); await barrier; return [music('new')] }, async () => {}, () => {})
+  const sync = createOnlineListSync(lists, async item => { calls.push(item.id); await barrier; return [music('new')] }, () => {})
   try {
     schedule(items, false, false)
     await nextTurn()
@@ -488,6 +503,40 @@ test('turning automatic sync off cancels queued and in-flight automatic results'
     await nextTurn()
     await sync.close()
     assert.deepEqual(calls, ['first'])
-    assert.deepEqual(writes, [])
+    assert.deepEqual(commits, ['first'])
   } finally { release(); await sync.close() }
 })
+
+for (const outcome of ['shared', 'retry', 'stale again'] as const) {
+  test(`manual online sync with an in-flight automatic task: ${outcome}`, async () => {
+    const db = database('current')
+    db.list().meta.autoSync = true
+    const lists = createMusicList(db.service, async () => ({}), async () => {})
+    let release!: () => void
+    const barrier = new Promise<void>((resolve) => { release = resolve })
+    let calls = 0
+    const sync = createOnlineListSync(lists, async () => {
+      if (++calls === 1) await barrier
+      else if (outcome === 'stale again') db.list().name = 'Edited twice'
+      return [music(`result-${calls}`)]
+    }, () => {})
+    try {
+      const background = sync.syncAllList()
+      await nextTurn()
+      assert.equal(calls, 1)
+      if (outcome !== 'shared') db.list().meta.autoSync = false
+      const manual = sync.syncList(db.list())
+      const completed = outcome === 'stale again' ? assert.rejects(manual, /changed during sync/) : manual
+      release()
+      await Promise.all([background, completed])
+      assert.equal(calls, outcome === 'shared' ? 1 : 2)
+      assert.equal(db.writes.length, outcome === 'stale again' ? 0 : 1)
+      assert.equal(db.list().meta.autoSync, outcome === 'shared')
+      if (outcome !== 'stale again') assert.equal(db.tracks()[0].id, `result-${calls}`)
+    } finally {
+      release()
+      await sync.close()
+      await lists.close()
+    }
+  })
+}
